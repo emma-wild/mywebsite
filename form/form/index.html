@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Document</title>
+</head>
+<body>
+    <h1>Анкета-відгук про доставку товару</h1>
+    <form >
+           <fieldset>
+            <legend>контактна інформація</legend>
+             <div>
+            <label for="name">ім'я</label>
+            <input type="text">
+            </div>
+        
+            <div>
+            <label for="tel">Телефон</label>
+            <input type="tel" id="tel" value="у форматі 000-000-00-00">
+            </div>
+        
+            <div>
+            <label for="email">E-mail</label>
+            <input type="email" id="mail">
+            </div>
+        
+            <div>
+            <label for="date">Дата замовлення товару</label>
+            <input type="date" id="date">
+            </div>
+           
+           </fieldset>
+           <fieldset>
+            <legend>персональна інформація</legend>
+             <div>
+            <label for="age">вік</label>
+            <input type="text">
+            </div>
+        
+            <div>
+            <label for="tel">Вид доставки яку ви обрали</label>
+            <select name="delivery" id="delivery">
+               <option>Кур'єрорм додому</option>
+               <option>До поштового відділення</option>
+            </select>
+            </div>
+        
+            <div>
+            <label for="propoz">Які пропозиції хотіли б додати?</label>
+            <input type="text" id="text">
+            </div> 
+            </fieldset>
+            <fieldset>
+                <legend>Оцінка нашого інтернет-магазину</legend>
+                 <div>
+                <label for="name">Чому ви обрали наш інтернет-магазин?</label>
+                <p><input type="checkbox"> поряд з місцем проживання </p>
+                <p><input type="checkbox"> побачив рекламу </p>
+                <p><input type="checkbox"> порадили друзі </p>
+                <p><input type="checkbox"> Найкраще співвідношення ціни і якості </p>
+                </div>
+            
+                <div>
+                <label for="tel">Чи будете рекомендувати цей заклад своїм знайомим?</label>
+                <p><input type="radio" name="lan"> Так </p>
+                <p><input type="radio" name="lan"> Ні  </p> 
+                </div>
+            
+                
+            </fieldset>
+            <fieldset>
+            <p>
+                <input type="submit" value="Відправити">
+                <input type="reset" value="Очистити">
+            </p>
+            </fieldset>
+    </form>
+    
+</body>
+</html>

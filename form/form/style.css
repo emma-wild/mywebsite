@@ -1,0 +1,15 @@
+html {
+    background-color: rosybrown;
+}
+legend {
+    font-style: italic;
+}
+div {
+    margin-top: 10px;
+}
+label {
+    font-weight: bold;
+}
+form {
+    width: 500px;
+}
