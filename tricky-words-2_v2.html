@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Duolingo-style Words</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; background: #f6f7fb; }
+    .app { max-width: 820px; margin: 0 auto; padding: 18px; }
+    .top {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .title { display:flex; align-items:center; gap:10px; }
+    .title h1 { font-size: 18px; margin: 0; }
+    .badge {
+      background: white; padding: 10px 12px; border-radius: 999px;
+      box-shadow: 0 6px 14px rgba(0,0,0,.08);
+      display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      font-size: 14px;
+    }
+    .pill { background:#eef2ff; padding: 4px 10px; border-radius: 999px; font-weight: 700; }
+    .card {
+      margin-top: 14px;
+      background: white;
+      border-radius: 18px;
+      padding: 22px 16px;
+      box-shadow: 0 8px 20px rgba(0,0,0,.08);
+      text-align: center;
+    }
+    .modeRow { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .modeBtn {
+      border:0; border-radius: 999px; padding: 10px 14px; cursor:pointer;
+      box-shadow: 0 6px 14px rgba(0,0,0,.08);
+      background: #ffffff; font-weight: 800;
+    }
+    .modeBtn.active { background:#2563eb; color:#fff; }
+    .bigEmoji { font-size: 54px; margin-top: 2px; }
+    .word { font-size: 64px; font-weight: 900; letter-spacing: 2px; margin-top: 6px; }
+    .hint { margin-top: 8px; font-size: 14px; opacity: .75; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 16px; }
+    button.action {
+      border: 0; border-radius: 14px; padding: 12px 14px;
+      font-size: 16px; font-weight: 800; cursor: pointer;
+      box-shadow: 0 6px 14px rgba(0,0,0,.08);
+      background: #ffffff;
+    }
+    button.primary { background: #16a34a; color: white; }
+    button.blue { background: #2563eb; color: white; }
+    button:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+    .status { margin-top: 12px; font-size: 18px; font-weight: 900; min-height: 28px; }
+    .small { font-size: 13px; opacity: .8; margin-top: 6px; }
+    .choices {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+    @media (max-width: 560px) {
+      .choices { grid-template-columns: 1fr; }
+    }
+    .choice {
+      border: 0; border-radius: 16px; padding: 14px 12px;
+      box-shadow: 0 6px 14px rgba(0,0,0,.08);
+      background: #fff;
+      cursor: pointer;
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
+    .choice.good { background:#16a34a; color:#fff; }
+    .choice.bad { background:#dc2626; color:#fff; }
+    .footer { margin-top: 14px; text-align:center; font-size: 12px; opacity: .7; }
+    .stars { font-size: 18px; letter-spacing: 2px; }
+    .shake { animation: shake .28s linear 1; }
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      50% { transform: translateX(6px); }
+      75% { transform: translateX(-4px); }
+      100% { transform: translateX(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top">
+      <div class="title">
+        <div style="font-size:26px;">🦉</div>
+        <h1>Учимся произношению (Duolingo-style)</h1>
+      </div>
+
+      <div class="badge">
+        <span class="pill">⭐ Очки: <span id="points">0</span></span>
+        <span class="pill">🔥 Серия: <span id="streak">0</span></span>
+        <span class="pill">🌟 Звёзды: <span id="stars">☆☆☆☆☆</span></span>
+        <span class="pill">✅ <span id="correct">0</span> / ❌ <span id="wrong">0</span></span>
+      </div>
+    </div>
+
+    <div class="card" id="card">
+      <div class="modeRow">
+        <button class="modeBtn active" id="modeSay">🎤 Скажи слово</button>
+        <button class="modeBtn" id="modeGuess">🔊 Угадай на слух</button>
+      </div>
+
+      <div class="bigEmoji" id="emoji">🧩</div>
+      <div class="word" id="word">he</div>
+      <div class="hint" id="hint">Нажми 🎤 и скажи слово вслух</div>
+
+      <div class="row" id="sayControls">
+        <button class="action" id="btnPrev">⬅️</button>
+        <button class="action primary" id="btnSpeak">🎤 Сказать</button>
+        <button class="action blue" id="btnPlay">🔊 Произнести</button>
+        <button class="action" id="btnNext">➡️</button>
+      </div>
+
+      <div id="guessControls" style="display:none; margin-top: 10px;">
+        <div class="row">
+          <button class="action blue" id="btnListen">🔊 Слушать слово</button>
+          <button class="action" id="btnNewRound">🎲 Новый раунд</button>
+        </div>
+        <div class="choices" id="choices"></div>
+      </div>
+
+      <div class="status" id="status"></div>
+      <div class="small" id="heard"></div>
+
+      <div class="row" style="margin-top:14px;">
+        <button class="action" id="btnShuffle">🔀 Перемешать</button>
+        <button class="action" id="btnReset">🧼 Сброс</button>
+      </div>
+
+      <div class="footer">
+        Лучше работает в <b>Chrome/Edge</b>. Для 🎤 нужен Web Speech API и разрешение микрофона.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== Данные ======
+    const WORDS = ["he","she","me","be","we","what","was","her","his","is"];
+
+    // Весёлые “картинки” (эмодзи) — можно дополнять
+    const EMOJI = {
+      he:"👦", she:"👧", me:"🙋", be:"✨", we:"🧑‍🤝‍🧑",
+      what:"❓", was:"⏳", her:"🎀", his:"🧢", is:"✅"
+    };
+
+    // ====== UI ======
+    const elCard = document.getElementById("card");
+    const elWord = document.getElementById("word");
+    const elEmoji = document.getElementById("emoji");
+    const elHint = document.getElementById("hint");
+    const elStatus = document.getElementById("status");
+    const elHeard = document.getElementById("heard");
+
+    const elPoints = document.getElementById("points");
+    const elStreak = document.getElementById("streak");
+    const elStars = document.getElementById("stars");
+    const elCorrect = document.getElementById("correct");
+    const elWrong = document.getElementById("wrong");
+
+    const modeSayBtn = document.getElementById("modeSay");
+    const modeGuessBtn = document.getElementById("modeGuess");
+
+    const sayControls = document.getElementById("sayControls");
+    const guessControls = document.getElementById("guessControls");
+
+    const btnPrev = document.getElementById("btnPrev");
+    const btnNext = document.getElementById("btnNext");
+    const btnSpeak = document.getElementById("btnSpeak");
+    const btnPlay = document.getElementById("btnPlay");
+    const btnShuffle = document.getElementById("btnShuffle");
+    const btnReset = document.getElementById("btnReset");
+
+    const btnListen = document.getElementById("btnListen");
+    const btnNewRound = document.getElementById("btnNewRound");
+    const elChoices = document.getElementById("choices");
+
+    // ====== Очки/звёзды ======
+    let points = 0;
+    let streak = 0;
+    let correct = 0;
+    let wrong = 0;
+
+    // 5 звёзд: каждые 3 правильных подряд дают звезду (упрощённо)
+    let starLevel = 0; // 0..5
+
+    function updateScoreboard() {
+      elPoints.textContent = points;
+      elStreak.textContent = streak;
+      elCorrect.textContent = correct;
+      elWrong.textContent = wrong;
+      elStars.textContent = "★".repeat(starLevel) + "☆".repeat(5 - starLevel);
+    }
+
+    function celebrateGood() {
+      elStatus.textContent = ["✅ Супер!","🌟 Молодец!","🎉 Отлично!","🦉 Ура!"][Math.floor(Math.random()*4)];
+    }
+
+    function celebrateBad() {
+      elStatus.textContent = ["❌ Почти!","🙂 Ещё раз!","🧠 Подумай!","🙈 Не то!"][Math.floor(Math.random()*4)];
+      elCard.classList.remove("shake");
+      void elCard.offsetWidth; // restart animation
+      elCard.classList.add("shake");
+    }
+
+    function addGoodScore() {
+      points += 10;
+      streak += 1;
+      correct += 1;
+
+      // Каждые 3 успешных подряд — +1 звезда, максимум 5
+      if (streak % 3 === 0 && starLevel < 5) starLevel += 1;
+
+      updateScoreboard();
+    }
+
+    function addBadScore() {
+      points = Math.max(0, points - 2);
+      streak = 0;
+      wrong += 1;
+      updateScoreboard();
+    }
+
+    // ====== Навигация по словам (для режима “Скажи слово”) ======
+    let words = [...WORDS];
+    let index = 0;
+
+    function setCardWord(w) {
+      elWord.textContent = w;
+      elEmoji.textContent = EMOJI[w] || "🧩";
+    }
+
+    function updateNavButtons() {
+      btnPrev.disabled = index <= 0;
+      btnNext.disabled = index >= words.length - 1;
+    }
+
+    function setSayModeCard() {
+      const w = words[index];
+      setCardWord(w);
+      elHint.textContent = "Нажми 🎤 и скажи слово вслух";
+      elStatus.textContent = "";
+      elHeard.textContent = "";
+      updateNavButtons();
+    }
+
+    function goNext() { if (index < words.length - 1) { index++; setSayModeCard(); } }
+    function goPrev() { if (index > 0) { index--; setSayModeCard(); } }
+
+    function shuffleWords() {
+      for (let i = words.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [words[i], words[j]] = [words[j], words[i]];
+      }
+      index = 0;
+      setSayModeCard();
+    }
+
+    // ====== Озвучка ======
+function speakWord(text) {
+  const voices = speechSynthesis.getVoices();
+
+  const britishVoice = voices.find(v =>
+    v.lang === "en-GB" && /female|kate|serena|daniel/i.test(v.name)
+  );
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-GB";
+  if (britishVoice) u.voice = britishVoice;
+  u.rate = 0.85;
+  u.pitch = 1.05;
+
+  speechSynthesis.speak(u);
+}
+
+
+    // ====== Распознавание речи ======
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 3;
+    }
+
+    function normalize(s) {
+      return (s || "")
+        .toLowerCase().trim()
+        .replace(/[^\w\s']/g, "")
+        .replace(/\s+/g, " ");
+    }
+
+    function startListening() {
+      const target = words[index];
+      if (!recognition) {
+        elStatus.textContent = "❌ Распознавание речи не поддерживается";
+        elHeard.textContent = "Попробуй Chrome/Edge (ПК/Android).";
+        return;
+      }
+
+      elStatus.textContent = "🎧 Слушаю...";
+      elHeard.textContent = "";
+      btnSpeak.disabled = true;
+
+      recognition.onresult = (event) => {
+        const alts = [];
+        for (let i = 0; i < event.results[0].length; i++) {
+          alts.push(event.results[0][i].transcript);
+        }
+
+        const heardRaw = alts[0] || "";
+        elHeard.innerHTML = `Я услышал: <span style="font-weight:900">"${heardRaw}"</span>`;
+
+        const expected = normalize(target);
+        const ok = alts.map(a => normalize(a)).some(a => a === expected);
+
+        if (ok) {
+          celebrateGood();
+          addGoodScore();
+          btnSpeak.disabled = false;
+          setTimeout(() => goNext(), 650);
+        } else {
+          celebrateBad();
+          addBadScore();
+          btnSpeak.disabled = false;
+        }
+      };
+
+      recognition.onerror = (e) => {
+        elStatus.textContent = "⚠️ Не получилось включить микрофон";
+        elHeard.textContent = `Ошибка: ${e.error || "unknown"}`;
+        btnSpeak.disabled = false;
+      };
+
+      recognition.onend = () => { btnSpeak.disabled = false; };
+
+      try { recognition.start(); } catch (e) { btnSpeak.disabled = false; }
+    }
+
+    // ====== Режим “Угадай на слух” ======
+    let mode = "say"; // "say" | "guess"
+    let currentAnswer = null;
+    let currentChoices = [];
+
+    function randInt(n) { return Math.floor(Math.random() * n); }
+
+    function pickDistinctWords(count, mustInclude) {
+      const set = new Set([mustInclude]);
+      while (set.size < count) set.add(WORDS[randInt(WORDS.length)]);
+      return [...set];
+    }
+
+    function renderChoices() {
+      elChoices.innerHTML = "";
+      currentChoices.forEach(w => {
+        const b = document.createElement("button");
+        b.className = "choice";
+        b.textContent = w;
+        b.addEventListener("click", () => onChoose(w, b));
+        elChoices.appendChild(b);
+      });
+    }
+
+    function newGuessRound() {
+      elStatus.textContent = "";
+      elHeard.textContent = "";
+      currentAnswer = WORDS[randInt(WORDS.length)];
+      currentChoices = pickDistinctWords(3, currentAnswer).sort(() => Math.random() - 0.5);
+
+      setCardWord("???");
+      elEmoji.textContent = "👂";
+      elHint.textContent = "Нажми 🔊, послушай и выбери правильное слово";
+      renderChoices();
+      speakWord(currentAnswer);
+    }
+
+    function onChoose(w, buttonEl) {
+      const buttons = [...elChoices.querySelectorAll("button")];
+      buttons.forEach(b => b.disabled = true);
+
+      if (w === currentAnswer) {
+        buttonEl.classList.add("good");
+        celebrateGood();
+        addGoodScore();
+        setTimeout(() => newGuessRound(), 700);
+      } else {
+        buttonEl.classList.add("bad");
+        celebrateBad();
+        addBadScore();
+
+        // подсветим правильный
+        const rightBtn = buttons.find(b => b.textContent === currentAnswer);
+        if (rightBtn) rightBtn.classList.add("good");
+        setTimeout(() => newGuessRound(), 900);
+      }
+    }
+
+    // ====== Переключение режимов ======
+    function setMode(newMode) {
+      mode = newMode;
+      elStatus.textContent = "";
+      elHeard.textContent = "";
+
+      if (mode === "say") {
+        modeSayBtn.classList.add("active");
+        modeGuessBtn.classList.remove("active");
+        sayControls.style.display = "";
+        guessControls.style.display = "none";
+        setSayModeCard();
+      } else {
+        modeGuessBtn.classList.add("active");
+        modeSayBtn.classList.remove("active");
+        sayControls.style.display = "none";
+        guessControls.style.display = "";
+        newGuessRound();
+      }
+    }
+
+    // ====== Reset ======
+    function resetAll() {
+      points = 0; streak = 0; correct = 0; wrong = 0; starLevel = 0;
+      updateScoreboard();
+      words = [...WORDS];
+      index = 0;
+      setMode(mode); // перерисовать текущий режим
+    }
+
+    // ====== Events ======
+    modeSayBtn.addEventListener("click", () => setMode("say"));
+    modeGuessBtn.addEventListener("click", () => setMode("guess"));
+
+    btnPrev.addEventListener("click", goPrev);
+    btnNext.addEventListener("click", goNext);
+    btnSpeak.addEventListener("click", startListening);
+    btnPlay.addEventListener("click", () => speakWord(words[index]));
+    btnShuffle.addEventListener("click", shuffleWords);
+    btnReset.addEventListener("click", resetAll);
+
+    btnListen.addEventListener("click", () => {
+      if (mode === "guess" && currentAnswer) speakWord(currentAnswer);
+    });
+    btnNewRound.addEventListener("click", () => {
+      if (mode === "guess") newGuessRound();
+    });
+
+    // Клавиатура (для удобства на ПК)
+    window.addEventListener("keydown", (e) => {
+      if (mode !== "say") return;
+      if (e.key === "ArrowRight") goNext();
+      if (e.key === "ArrowLeft") goPrev();
+      if (e.key === " ") { e.preventDefault(); startListening(); }
+    });
+
+    // ====== Start ======
+    updateScoreboard();
+    setMode("say");
+  </script>
+</body>
+</html>
