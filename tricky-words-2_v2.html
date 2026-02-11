@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -87,38 +87,38 @@
     <div class="top">
       <div class="title">
         <div style="font-size:26px;">🦉</div>
-        <h1>Учимся произношению (Duolingo-style)</h1>
+        <h1>Pronunciation Practice (Duolingo-style)</h1>
       </div>
 
       <div class="badge">
-        <span class="pill">⭐ Очки: <span id="points">0</span></span>
-        <span class="pill">🔥 Серия: <span id="streak">0</span></span>
-        <span class="pill">🌟 Звёзды: <span id="stars">☆☆☆☆☆</span></span>
+        <span class="pill">⭐ Points: <span id="points">0</span></span>
+        <span class="pill">🔥 Streak: <span id="streak">0</span></span>
+        <span class="pill">🌟 Stars: <span id="stars">☆☆☆☆☆</span></span>
         <span class="pill">✅ <span id="correct">0</span> / ❌ <span id="wrong">0</span></span>
       </div>
     </div>
 
     <div class="card" id="card">
       <div class="modeRow">
-        <button class="modeBtn active" id="modeSay">🎤 Скажи слово</button>
-        <button class="modeBtn" id="modeGuess">🔊 Угадай на слух</button>
+        <button class="modeBtn active" id="modeSay">🎤 Say the word</button>
+        <button class="modeBtn" id="modeGuess">🔊 Guess by listening</button>
       </div>
 
       <div class="bigEmoji" id="emoji">🧩</div>
       <div class="word" id="word">he</div>
-      <div class="hint" id="hint">Нажми 🎤 и скажи слово вслух</div>
+      <div class="hint" id="hint">Press 🎤 and say the word out loud</div>
 
       <div class="row" id="sayControls">
         <button class="action" id="btnPrev">⬅️</button>
-        <button class="action primary" id="btnSpeak">🎤 Сказать</button>
-        <button class="action blue" id="btnPlay">🔊 Произнести</button>
+        <button class="action primary" id="btnSpeak">🎤 Speak</button>
+        <button class="action blue" id="btnPlay">🔊 Listen</button>
         <button class="action" id="btnNext">➡️</button>
       </div>
 
       <div id="guessControls" style="display:none; margin-top: 10px;">
         <div class="row">
-          <button class="action blue" id="btnListen">🔊 Слушать слово</button>
-          <button class="action" id="btnNewRound">🎲 Новый раунд</button>
+          <button class="action blue" id="btnListen">🔊 Listen</button>
+          <button class="action" id="btnNewRound">🎲 New round</button>
         </div>
         <div class="choices" id="choices"></div>
       </div>
@@ -127,21 +127,21 @@
       <div class="small" id="heard"></div>
 
       <div class="row" style="margin-top:14px;">
-        <button class="action" id="btnShuffle">🔀 Перемешать</button>
-        <button class="action" id="btnReset">🧼 Сброс</button>
+        <button class="action" id="btnShuffle">🔀 Shuffle</button>
+        <button class="action" id="btnReset">🧼 Reset</button>
       </div>
 
       <div class="footer">
-        Лучше работает в <b>Chrome/Edge</b>. Для 🎤 нужен Web Speech API и разрешение микрофона.
+        Works best in <b>Chrome/Edge</b>. 🎤 requires the Web Speech API and microphone permission.
       </div>
     </div>
   </div>
 
   <script>
-    // ====== Данные ======
+    // ====== Data ======
     const WORDS = ["he","she","me","be","we","what","was","her","his","is"];
 
-    // Весёлые “картинки” (эмодзи) — можно дополнять
+    // Fun “pictures” (emoji) — feel free to add more
     const EMOJI = {
       he:"👦", she:"👧", me:"🙋", be:"✨", we:"🧑‍🤝‍🧑",
       what:"❓", was:"⏳", her:"🎀", his:"🧢", is:"✅"
@@ -178,13 +178,13 @@
     const btnNewRound = document.getElementById("btnNewRound");
     const elChoices = document.getElementById("choices");
 
-    // ====== Очки/звёзды ======
+    // ====== Points / stars ======
     let points = 0;
     let streak = 0;
     let correct = 0;
     let wrong = 0;
 
-    // 5 звёзд: каждые 3 правильных подряд дают звезду (упрощённо)
+    // 5 stars: every 3 correct answers in a row gives a star (simplified)
     let starLevel = 0; // 0..5
 
     function updateScoreboard() {
@@ -196,11 +196,11 @@
     }
 
     function celebrateGood() {
-      elStatus.textContent = ["✅ Супер!","🌟 Молодец!","🎉 Отлично!","🦉 Ура!"][Math.floor(Math.random()*4)];
+      elStatus.textContent = ["✅ Great!","🌟 Well done!","🎉 Awesome!","🦉 Hooray!"][Math.floor(Math.random()*4)];
     }
 
     function celebrateBad() {
-      elStatus.textContent = ["❌ Почти!","🙂 Ещё раз!","🧠 Подумай!","🙈 Не то!"][Math.floor(Math.random()*4)];
+      elStatus.textContent = ["❌ Almost!","🙂 Try again!","🧠 Think!","🙈 Not this one!"][Math.floor(Math.random()*4)];
       elCard.classList.remove("shake");
       void elCard.offsetWidth; // restart animation
       elCard.classList.add("shake");
@@ -224,7 +224,7 @@
       updateScoreboard();
     }
 
-    // ====== Навигация по словам (для режима “Скажи слово”) ======
+    // ====== Word navigation (for “Say the word” mode) ======
     let words = [...WORDS];
     let index = 0;
 
@@ -241,7 +241,7 @@
     function setSayModeCard() {
       const w = words[index];
       setCardWord(w);
-      elHint.textContent = "Нажми 🎤 и скажи слово вслух";
+      elHint.textContent = "Press 🎤 and say the word out loud";
       elStatus.textContent = "";
       elHeard.textContent = "";
       updateNavButtons();
@@ -259,7 +259,7 @@
       setSayModeCard();
     }
 
-    // ====== Озвучка ======
+    // ====== Speech synthesis ======
 function speakWord(text) {
   const voices = speechSynthesis.getVoices();
 
@@ -277,7 +277,7 @@ function speakWord(text) {
 }
 
 
-    // ====== Распознавание речи ======
+    // ====== Speech recognition ======
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     if (SpeechRecognition) {
@@ -297,12 +297,12 @@ function speakWord(text) {
     function startListening() {
       const target = words[index];
       if (!recognition) {
-        elStatus.textContent = "❌ Распознавание речи не поддерживается";
-        elHeard.textContent = "Попробуй Chrome/Edge (ПК/Android).";
+        elStatus.textContent = "❌ Speech recognition is not supported";
+        elHeard.textContent = "Try Chrome/Edge (desktop/Android).";
         return;
       }
 
-      elStatus.textContent = "🎧 Слушаю...";
+      elStatus.textContent = "🎧 Listening...";
       elHeard.textContent = "";
       btnSpeak.disabled = true;
 
@@ -313,7 +313,7 @@ function speakWord(text) {
         }
 
         const heardRaw = alts[0] || "";
-        elHeard.innerHTML = `Я услышал: <span style="font-weight:900">"${heardRaw}"</span>`;
+        elHeard.innerHTML = `I heard: <span style="font-weight:900">"${heardRaw}"</span>`;
 
         const expected = normalize(target);
         const ok = alts.map(a => normalize(a)).some(a => a === expected);
@@ -331,8 +331,8 @@ function speakWord(text) {
       };
 
       recognition.onerror = (e) => {
-        elStatus.textContent = "⚠️ Не получилось включить микрофон";
-        elHeard.textContent = `Ошибка: ${e.error || "unknown"}`;
+        elStatus.textContent = "⚠️ Could not access the microphone";
+        elHeard.textContent = `Error: ${e.error || "unknown"}`;
         btnSpeak.disabled = false;
       };
 
@@ -341,7 +341,7 @@ function speakWord(text) {
       try { recognition.start(); } catch (e) { btnSpeak.disabled = false; }
     }
 
-    // ====== Режим “Угадай на слух” ======
+    // ====== “Guess by listening” mode ======
     let mode = "say"; // "say" | "guess"
     let currentAnswer = null;
     let currentChoices = [];
@@ -373,7 +373,7 @@ function speakWord(text) {
 
       setCardWord("???");
       elEmoji.textContent = "👂";
-      elHint.textContent = "Нажми 🔊, послушай и выбери правильное слово";
+      elHint.textContent = "Press 🔊, listen, and choose the correct word";
       renderChoices();
       speakWord(currentAnswer);
     }
@@ -392,14 +392,14 @@ function speakWord(text) {
         celebrateBad();
         addBadScore();
 
-        // подсветим правильный
+        // highlight the correct one
         const rightBtn = buttons.find(b => b.textContent === currentAnswer);
         if (rightBtn) rightBtn.classList.add("good");
         setTimeout(() => newGuessRound(), 900);
       }
     }
 
-    // ====== Переключение режимов ======
+    // ====== Mode switching ======
     function setMode(newMode) {
       mode = newMode;
       elStatus.textContent = "";
@@ -426,7 +426,7 @@ function speakWord(text) {
       updateScoreboard();
       words = [...WORDS];
       index = 0;
-      setMode(mode); // перерисовать текущий режим
+      setMode(mode); // re-render the current mode
     }
 
     // ====== Events ======
@@ -447,7 +447,7 @@ function speakWord(text) {
       if (mode === "guess") newGuessRound();
     });
 
-    // Клавиатура (для удобства на ПК)
+    // Keyboard shortcuts (handy on desktop)
     window.addEventListener("keydown", (e) => {
       if (mode !== "say") return;
       if (e.key === "ArrowRight") goNext();
