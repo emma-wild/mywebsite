@@ -155,7 +155,7 @@
       "our":  ["hour", "are", "r"],
       "by":   ["bye", "buy", "bi"],
       "you":  ["u", "ewe"],
-      "your": ["you're", "youre", "yore"],
+      "your": ["you're", "youre", "yore", "yo", "euro"],
       "they": ["the"],
     };
 
@@ -340,6 +340,7 @@ function speakWord(text) {
       btnSpeak.classList.add("listening");
 
       recognition.onresult = (event) => {
+        if (!isListening) return; // guard: ignore events that fire after we already accepted
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           const alts = Array.from({length: result.length}, (_, j) => result[j].transcript);
