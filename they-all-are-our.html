@@ -149,6 +149,16 @@
     // ====== Data ======
     const WORDS = ["they", "all", "are", "my", "by", "have", "love", "you", "your", "our"];
 
+    // Words that sound the same (or close enough) but are spelled differently
+    const HOMOPHONES = {
+      "are":  ["r", "ah", "ahh"],
+      "our":  ["hour", "are", "r"],
+      "by":   ["bye", "buy", "bi"],
+      "you":  ["u", "ewe"],
+      "your": ["you're", "youre", "yore"],
+      "they": ["the"],
+    };
+
     // Fun “pictures” (emoji) — feel free to add more
     const EMOJI = {
       he:"👦", she:"👧", me:"🙋", be:"✨", we:"🧑‍🤝‍🧑",
@@ -338,7 +348,8 @@ function speakWord(text) {
           elHeard.innerHTML = `I heard: <span style="font-weight:900">"${heardRaw}"</span>`;
 
           const expected = normalize(target);
-          const ok = alts.map(a => normalize(a)).some(a => a.split(/\s+/).includes(expected));
+          const accepted = new Set([expected, ...(HOMOPHONES[expected] || [])]);
+          const ok = alts.map(a => normalize(a)).some(a => a.split(/\s+/).some(w => accepted.has(w)));
 
           if (ok) {
             stopListening();
