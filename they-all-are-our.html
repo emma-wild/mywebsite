@@ -345,6 +345,9 @@ function speakWord(text) {
           const alts = Array.from({length: result.length}, (_, j) => result[j].transcript);
           const heardRaw = alts[0] || "";
 
+          // Empty result — skip silently, keep listening
+          if (!normalize(heardRaw)) return;
+
           elHeard.innerHTML = `I heard: <span style="font-weight:900">"${heardRaw}"</span>`;
 
           const expected = normalize(target);
