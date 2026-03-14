@@ -80,6 +80,14 @@
       75% { transform: translateX(-4px); }
       100% { transform: translateX(0); }
     }
+    .listening {
+      background: #16a34a !important; color: white !important;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(1.06); }
+    }
   </style>
 </head>
 <body>
@@ -239,6 +247,7 @@
     }
 
     function setSayModeCard() {
+      stopListening();
       const w = words[index];
       setCardWord(w);
       elHint.textContent = "Press 🎤 and say the word out loud";
@@ -280,11 +289,13 @@ function speakWord(text) {
     // ====== Speech recognition ======
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
+    let isListening = false;
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.lang = "en-US";
-      recognition.interimResults = false;
+      recognition.interimResults = true;
       recognition.maxAlternatives = 3;
+      recognition.continuous = true;
     }
 
     function normalize(s) {
@@ -294,7 +305,17 @@ function speakWord(text) {
         .replace(/\s+/g, " ");
     }
 
+    function stopListening() {
+      if (!isListening) return;
+      isListening = false;
+      btnSpeak.textContent = "🎤 Speak";
+      btnSpeak.classList.remove("listening");
+      try { recognition.stop(); } catch(e) {}
+    }
+
     function startListening() {
+      if (isListening) { stopListening(); return; }
+
       const target = words[index];
       if (!recognition) {
         elStatus.textContent = "❌ Speech recognition is not supported";
@@ -302,43 +323,56 @@ function speakWord(text) {
         return;
       }
 
-      elStatus.textContent = "🎧 Listening...";
+      isListening = true;
+      elStatus.textContent = "🎧 Listening…";
       elHeard.textContent = "";
-      btnSpeak.disabled = true;
+      btnSpeak.textContent = "⏹️ Stop";
+      btnSpeak.classList.add("listening");
 
       recognition.onresult = (event) => {
-        const alts = [];
-        for (let i = 0; i < event.results[0].length; i++) {
-          alts.push(event.results[0][i].transcript);
-        }
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          const alts = Array.from({length: result.length}, (_, j) => result[j].transcript);
+          const heardRaw = alts[0] || "";
 
-        const heardRaw = alts[0] || "";
-        elHeard.innerHTML = `I heard: <span style="font-weight:900">"${heardRaw}"</span>`;
+          elHeard.innerHTML = `I heard: <span style="font-weight:900">"${heardRaw}"</span>`;
 
-        const expected = normalize(target);
-        const ok = alts.map(a => normalize(a)).some(a => a === expected);
+          const expected = normalize(target);
+          const ok = alts.map(a => normalize(a)).some(a => a === expected);
 
-        if (ok) {
-          celebrateGood();
-          addGoodScore();
-          btnSpeak.disabled = false;
-          setTimeout(() => goNext(), 650);
-        } else {
-          celebrateBad();
-          addBadScore();
-          btnSpeak.disabled = false;
+          if (ok) {
+            stopListening();
+            celebrateGood();
+            addGoodScore();
+            setTimeout(() => goNext(), 650);
+            return;
+          }
+
+          // Only penalise on a definitive final result that doesn't match
+          if (result.isFinal) {
+            celebrateBad();
+            addBadScore();
+          }
         }
       };
 
       recognition.onerror = (e) => {
+        if (e.error === "no-speech") return; // silence timeout — keep listening
+        stopListening();
         elStatus.textContent = "⚠️ Could not access the microphone";
         elHeard.textContent = `Error: ${e.error || "unknown"}`;
-        btnSpeak.disabled = false;
       };
 
-      recognition.onend = () => { btnSpeak.disabled = false; };
+      // Some browsers stop continuous recognition after silence; restart automatically
+      recognition.onend = () => {
+        if (isListening) { try { recognition.start(); } catch(e) {} }
+      };
 
-      try { recognition.start(); } catch (e) { btnSpeak.disabled = false; }
+      try { recognition.start(); } catch(e) {
+        isListening = false;
+        btnSpeak.textContent = "🎤 Speak";
+        btnSpeak.classList.remove("listening");
+      }
     }
 
     // ====== “Guess by listening” mode ======
@@ -401,6 +435,7 @@ function speakWord(text) {
 
     // ====== Mode switching ======
     function setMode(newMode) {
+      stopListening();
       mode = newMode;
       elStatus.textContent = "";
       elHeard.textContent = "";
@@ -422,6 +457,7 @@ function speakWord(text) {
 
     // ====== Reset ======
     function resetAll() {
+      stopListening();
       points = 0; streak = 0; correct = 0; wrong = 0; starLevel = 0;
       updateScoreboard();
       words = [...WORDS];
