@@ -338,7 +338,7 @@ function speakWord(text) {
           elHeard.innerHTML = `I heard: <span style="font-weight:900">"${heardRaw}"</span>`;
 
           const expected = normalize(target);
-          const ok = alts.map(a => normalize(a)).some(a => a === expected);
+          const ok = alts.map(a => normalize(a)).some(a => a.split(/\s+/).includes(expected));
 
           if (ok) {
             stopListening();
