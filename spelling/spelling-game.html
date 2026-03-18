@@ -781,32 +781,112 @@ async function initTesseract() {
 }
 
 async function recognizeCanvas() {
-  // Create a clean image from canvas
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = canvas.width;
-  tempCanvas.height = canvas.height;
-  const tempCtx = tempCanvas.getContext('2d');
-  
-  // White background
-  tempCtx.fillStyle = '#FFFFFF';
-  tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-  
-  // Redraw just the strokes, thicker for better OCR
-  tempCtx.strokeStyle = '#000000';
-  tempCtx.lineWidth = 6;
-  tempCtx.lineCap = 'round';
-  tempCtx.lineJoin = 'round';
+  // Step 1: Find bounding box of all strokes
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const path of paths) {
+    for (const p of path) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+  }
+  if (minX === Infinity) return '';
+
+  // Step 2: Add generous padding around the strokes
+  const pad = 40;
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(canvas.width, maxX + pad);
+  maxY = Math.min(canvas.height, maxY + pad);
+  const cropW = maxX - minX;
+  const cropH = maxY - minY;
+
+  // Step 3: Draw strokes on a cropped canvas with thick black lines
+  const cropCanvas = document.createElement('canvas');
+  cropCanvas.width = cropW;
+  cropCanvas.height = cropH;
+  const cropCtx = cropCanvas.getContext('2d');
+  cropCtx.fillStyle = '#FFFFFF';
+  cropCtx.fillRect(0, 0, cropW, cropH);
+  cropCtx.strokeStyle = '#000000';
+  cropCtx.lineWidth = 8;
+  cropCtx.lineCap = 'round';
+  cropCtx.lineJoin = 'round';
   for (const path of paths) {
     if (path.length < 2) continue;
-    tempCtx.beginPath();
-    tempCtx.moveTo(path[0].x, path[0].y);
+    cropCtx.beginPath();
+    cropCtx.moveTo(path[0].x - minX, path[0].y - minY);
     for (let i = 1; i < path.length; i++) {
-      tempCtx.lineTo(path[i].x, path[i].y);
+      cropCtx.lineTo(path[i].x - minX, path[i].y - minY);
     }
-    tempCtx.stroke();
+    cropCtx.stroke();
   }
 
-  const blob = await new Promise(r => tempCanvas.toBlob(r, 'image/png'));
+  // Step 4: Scale up to a standard height for Tesseract (target ~100px tall)
+  const targetH = 120;
+  const scale = targetH / cropH;
+  const scaledW = Math.round(cropW * scale);
+  const scaledH = targetH;
+
+  const scaledCanvas = document.createElement('canvas');
+  // Add extra white padding around the scaled image
+  const outerPad = 30;
+  scaledCanvas.width = scaledW + outerPad * 2;
+  scaledCanvas.height = scaledH + outerPad * 2;
+  const scaledCtx = scaledCanvas.getContext('2d');
+  scaledCtx.fillStyle = '#FFFFFF';
+  scaledCtx.fillRect(0, 0, scaledCanvas.width, scaledCanvas.height);
+  scaledCtx.imageSmoothingEnabled = true;
+  scaledCtx.imageSmoothingQuality = 'high';
+  scaledCtx.drawImage(cropCanvas, outerPad, outerPad, scaledW, scaledH);
+
+  // Step 5: Binarize — convert to pure black & white with threshold
+  const imgData = scaledCtx.getImageData(0, 0, scaledCanvas.width, scaledCanvas.height);
+  const d = imgData.data;
+  const threshold = 140;
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+    const val = gray < threshold ? 0 : 255;
+    d[i] = d[i+1] = d[i+2] = val;
+    d[i+3] = 255;
+  }
+  scaledCtx.putImageData(imgData, 0, 0);
+
+  // Step 6: Dilate — thicken the black strokes by 1px for better OCR
+  const dilatedCanvas = document.createElement('canvas');
+  dilatedCanvas.width = scaledCanvas.width;
+  dilatedCanvas.height = scaledCanvas.height;
+  const dilCtx = dilatedCanvas.getContext('2d');
+  dilCtx.fillStyle = '#FFFFFF';
+  dilCtx.fillRect(0, 0, dilatedCanvas.width, dilatedCanvas.height);
+  const srcData = scaledCtx.getImageData(0, 0, scaledCanvas.width, scaledCanvas.height);
+  const dstData = dilCtx.createImageData(scaledCanvas.width, scaledCanvas.height);
+  const w = scaledCanvas.width, h = scaledCanvas.height;
+  // Fill white
+  for (let i = 0; i < dstData.data.length; i += 4) {
+    dstData.data[i] = dstData.data[i+1] = dstData.data[i+2] = 255;
+    dstData.data[i+3] = 255;
+  }
+  // Dilate: if any neighbor is black, make this pixel black
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      let isBlackNeighbor = false;
+      for (let dy = -1; dy <= 1 && !isBlackNeighbor; dy++) {
+        for (let dx = -1; dx <= 1 && !isBlackNeighbor; dx++) {
+          const idx = ((y + dy) * w + (x + dx)) * 4;
+          if (srcData.data[idx] === 0) isBlackNeighbor = true;
+        }
+      }
+      const idx = (y * w + x) * 4;
+      if (isBlackNeighbor) {
+        dstData.data[idx] = dstData.data[idx+1] = dstData.data[idx+2] = 0;
+      }
+    }
+  }
+  dilCtx.putImageData(dstData, 0, 0);
+
+  const blob = await new Promise(r => dilatedCanvas.toBlob(r, 'image/png'));
   if (!tesseractWorker) await initTesseract();
   const { data } = await tesseractWorker.recognize(blob);
   return data.text.trim().toLowerCase().replace(/[^a-z]/g, '');
@@ -1012,10 +1092,15 @@ async function checkAnswer() {
       } else if (recognized === word) {
         handleCorrect();
       } else {
-        // Check if it's close (Levenshtein distance 1) — might be OCR error
+        // Smart OCR tolerance — short words are harder for Tesseract
         const dist = levenshtein(recognized, word);
-        if (dist <= 1 && word.length > 2) {
-          // Probably OCR error, ask user
+        // For short words (≤3 chars): any mismatch → ask user (OCR is unreliable)
+        // For medium words (4-5 chars): dist ≤ 2 → ask user
+        // For longer words (6+ chars): dist ≤ 2 → ask user
+        const isUncertain = (word.length <= 3 && dist >= 1)
+          || (word.length <= 5 && dist <= 2)
+          || (word.length > 5 && dist <= 2);
+        if (isUncertain) {
           showFallback(area);
           document.getElementById('buttons-main').style.display = 'none';
           document.getElementById('buttons-next').style.display = 'none';
