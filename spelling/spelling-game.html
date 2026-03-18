@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tricky Words — Learn to Spell!</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #FFF8F0;
+    --card: #FFFFFF;
+    --primary: #FF6B4A;
+    --primary-glow: #FF6B4A40;
+    --secondary: #4ECDC4;
+    --secondary-glow: #4ECDC440;
+    --accent: #FFE66D;
+    --accent-dark: #F0D000;
+    --purple: #A78BFA;
+    --pink: #F472B6;
+    --text: #2D3436;
+    --text-light: #636E72;
+    --success: #22C55E;
+    --success-bg: #DCFCE7;
+    --error: #EF4444;
+    --error-bg: #FEE2E2;
+    --canvas-bg: #FEFEFE;
+    --canvas-line: #E8E4DF;
+    --shadow: 0 4px 24px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+    --radius: 20px;
+    --radius-sm: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background decoration */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -120px;
+    right: -120px;
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+    opacity: 0.25;
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -100px;
+    left: -100px;
+    width: 350px;
+    height: 350px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--secondary-glow) 0%, transparent 70%);
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .header h1 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--primary), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+  .header .subtitle {
+    font-size: 0.95rem;
+    color: var(--text-light);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    flex: 1;
+    background: var(--card);
+    border-radius: var(--radius-sm);
+    padding: 12px 10px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    border: 2px solid transparent;
+    transition: all 0.3s;
+  }
+  .stat-card.streak { border-color: var(--accent); }
+  .stat-card.score { border-color: var(--secondary); }
+  .stat-card.phase-stat { border-color: var(--purple); }
+  .stat-icon { font-size: 1.3rem; }
+  .stat-value {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .stat-card.streak .stat-value { color: var(--accent-dark); }
+  .stat-card.score .stat-value { color: var(--secondary); }
+  .stat-card.phase-stat .stat-value { color: var(--purple); }
+  .stat-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-light);
+  }
+
+  /* Phase selector */
+  .phase-selector {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .phase-btn {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 8px 16px;
+    border-radius: 50px;
+    border: 2.5px solid #E0DCD7;
+    background: var(--card);
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .phase-btn:hover { border-color: var(--purple); color: var(--purple); }
+  .phase-btn.active {
+    background: var(--purple);
+    border-color: var(--purple);
+    color: white;
+    box-shadow: 0 3px 12px rgba(167,139,250,0.4);
+  }
+
+  /* Game card */
+  .game-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 24px 20px;
+    box-shadow: var(--shadow-lg);
+    margin-bottom: 16px;
+  }
+
+  /* Word prompt */
+  .word-prompt {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .listen-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, var(--primary), #FF8A6B);
+    color: white;
+    font-size: 1.8rem;
+    cursor: pointer;
+    box-shadow: 0 4px 16px var(--primary-glow);
+    transition: all 0.25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .listen-btn:hover { transform: scale(1.08); box-shadow: 0 6px 24px var(--primary-glow); }
+  .listen-btn:active { transform: scale(0.95); }
+  .listen-btn.speaking {
+    animation: pulse-ring 1s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%, 100% { box-shadow: 0 0 0 0 var(--primary-glow); }
+    50% { box-shadow: 0 0 0 16px transparent; }
+  }
+  .prompt-text {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-light);
+    text-align: left;
+    line-height: 1.3;
+  }
+  .prompt-text strong {
+    color: var(--text);
+  }
+
+  /* Canvas area */
+  .canvas-wrapper {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 3px solid #E8E4DF;
+    background: var(--canvas-bg);
+    margin-bottom: 16px;
+    touch-action: none;
+    transition: border-color 0.3s;
+  }
+  .canvas-wrapper.drawing { border-color: var(--secondary); }
+  .canvas-wrapper.correct { border-color: var(--success); }
+  .canvas-wrapper.wrong { border-color: var(--error); }
+
+  canvas {
+    display: block;
+    width: 100%;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .canvas-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    color: #C8C2BA;
+    font-weight: 600;
+    font-size: 1rem;
+    opacity: 1;
+    transition: opacity 0.3s;
+  }
+  .canvas-placeholder.hidden { opacity: 0; }
+  .canvas-placeholder .pencil-icon { font-size: 2rem; display: block; margin-bottom: 6px; }
+
+  /* Buttons row */
+  .buttons-row {
+    display: flex;
+    gap: 10px;
+  }
+  .btn {
+    flex: 1;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 14px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .btn-check {
+    background: linear-gradient(135deg, var(--secondary), #3DB8B0);
+    color: white;
+    box-shadow: 0 4px 16px var(--secondary-glow);
+    flex: 2;
+  }
+  .btn-check:hover:not(:disabled) { box-shadow: 0 6px 24px var(--secondary-glow); }
+
+  .btn-clear {
+    background: #F1EDEA;
+    color: var(--text-light);
+  }
+  .btn-clear:hover { background: #E8E4DF; }
+
+  .btn-skip {
+    background: #F1EDEA;
+    color: var(--text-light);
+  }
+  .btn-skip:hover { background: #E8E4DF; }
+
+  .btn-next {
+    background: linear-gradient(135deg, var(--primary), #FF8A6B);
+    color: white;
+    box-shadow: 0 4px 16px var(--primary-glow);
+    flex: 1;
+  }
+
+  /* Feedback */
+  .feedback {
+    text-align: center;
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    animation: feedback-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes feedback-pop {
+    0% { transform: scale(0.8); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .feedback.correct {
+    background: var(--success-bg);
+    color: #166534;
+  }
+  .feedback.wrong {
+    background: var(--error-bg);
+    color: #991B1B;
+  }
+  .feedback .answer-reveal {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.6rem;
+    display: block;
+    margin-top: 6px;
+    letter-spacing: 3px;
+  }
+
+  /* Fallback prompt */
+  .fallback-prompt {
+    text-align: center;
+    margin-bottom: 16px;
+    animation: feedback-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .fallback-prompt p {
+    font-weight: 600;
+    color: var(--text-light);
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+  }
+  .fallback-prompt .answer-display {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 2rem;
+    color: var(--purple);
+    letter-spacing: 4px;
+    margin-bottom: 12px;
+  }
+  .fallback-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .fallback-btn {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 10px 24px;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .fallback-btn:active { transform: scale(0.95); }
+  .fallback-btn.yes {
+    background: var(--success);
+    color: white;
+  }
+  .fallback-btn.no {
+    background: var(--error);
+    color: white;
+  }
+  .fallback-btn.retry {
+    background: var(--accent);
+    color: var(--text);
+  }
+
+  /* Progress bar */
+  .progress-section {
+    margin-bottom: 16px;
+  }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-light);
+    margin-bottom: 6px;
+  }
+  .progress-track {
+    height: 10px;
+    background: #EDE9E4;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 10px;
+    background: linear-gradient(90deg, var(--secondary), var(--purple));
+    transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Loading overlay */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255,248,240,0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    gap: 16px;
+  }
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border: 5px solid #EDE9E4;
+    border-top: 5px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text {
+    font-weight: 700;
+    color: var(--text-light);
+    font-size: 1rem;
+  }
+
+  /* Confetti canvas */
+  #confetti-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 99;
+  }
+
+  /* Keyboard input fallback */
+  .keyboard-section {
+    margin-bottom: 16px;
+  }
+  .keyboard-input {
+    width: 100%;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.8rem;
+    text-align: center;
+    padding: 14px;
+    border: 3px solid #E8E4DF;
+    border-radius: var(--radius-sm);
+    background: var(--canvas-bg);
+    color: var(--text);
+    letter-spacing: 4px;
+    outline: none;
+    transition: border-color 0.3s;
+  }
+  .keyboard-input:focus { border-color: var(--secondary); }
+  .keyboard-input.correct { border-color: var(--success); }
+  .keyboard-input.wrong { border-color: var(--error); }
+
+  .input-mode-toggle {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .toggle-btn {
+    font-family: 'Nunito', sans-serif;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--text-light);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+  }
+  .toggle-btn:hover { color: var(--purple); }
+
+  /* Responsive */
+  @media (max-width: 400px) {
+    .header h1 { font-size: 1.6rem; }
+    .stat-value { font-size: 1.2rem; }
+    .listen-btn { width: 54px; height: 54px; font-size: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="confetti-canvas"></canvas>
+
+<div class="app" id="app">
+  <!-- Header -->
+  <div class="header">
+    <h1>✨ Tricky Words</h1>
+    <div class="subtitle">Listen, Write, Learn!</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card streak">
+      <div class="stat-icon">🔥</div>
+      <div class="stat-value" id="streak">0</div>
+      <div class="stat-label">Streak</div>
+    </div>
+    <div class="stat-card score">
+      <div class="stat-icon">⭐</div>
+      <div class="stat-value" id="score">0</div>
+      <div class="stat-label">Stars</div>
+    </div>
+    <div class="stat-card phase-stat">
+      <div class="stat-icon">📖</div>
+      <div class="stat-value" id="words-done">0<span style="font-size:0.8rem;font-weight:500;color:var(--text-light)">/<span id="words-total">0</span></span></div>
+      <div class="stat-label">Words</div>
+    </div>
+  </div>
+
+  <!-- Phase selector -->
+  <div class="phase-selector" id="phase-selector"></div>
+
+  <!-- Progress -->
+  <div class="progress-section">
+    <div class="progress-label">
+      <span>Progress</span>
+      <span id="progress-pct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+    </div>
+  </div>
+
+  <!-- Game card -->
+  <div class="game-card">
+    <!-- Word prompt -->
+    <div class="word-prompt">
+      <button class="listen-btn" id="listen-btn" title="Listen to the word">🔊</button>
+      <div class="prompt-text">
+        Tap the speaker to hear the word, then <strong>write it below!</strong>
+      </div>
+    </div>
+
+    <!-- Input mode toggle -->
+    <div class="input-mode-toggle">
+      <button class="toggle-btn" id="mode-toggle">Switch to keyboard ⌨️</button>
+    </div>
+
+    <!-- Canvas input -->
+    <div id="canvas-section">
+      <div class="canvas-wrapper" id="canvas-wrapper">
+        <canvas id="draw-canvas" height="180"></canvas>
+        <div class="canvas-placeholder" id="canvas-placeholder">
+          <span class="pencil-icon">✏️</span>
+          Write the word here
+        </div>
+      </div>
+    </div>
+
+    <!-- Keyboard input (hidden by default) -->
+    <div id="keyboard-section" class="keyboard-section" style="display:none;">
+      <input type="text" class="keyboard-input" id="keyboard-input" placeholder="type here..." autocomplete="off" autocapitalize="none" spellcheck="false">
+    </div>
+
+    <!-- Feedback area -->
+    <div id="feedback-area"></div>
+
+    <!-- Buttons -->
+    <div class="buttons-row" id="buttons-main">
+      <button class="btn btn-clear" id="btn-clear">🗑️ Clear</button>
+      <button class="btn btn-check" id="btn-check">✅ Check</button>
+      <button class="btn btn-skip" id="btn-skip">⏭️ Skip</button>
+    </div>
+    <div class="buttons-row" id="buttons-next" style="display:none;">
+      <button class="btn btn-next" id="btn-next">Next Word →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading" style="display:none;">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Recognizing your writing...</div>
+</div>
+
+<script>
+// ==================== WORD DATA ====================
+const PHASES = {
+  2: { label: 'Phase 2', words: ['I', 'no', 'go', 'the', 'to', 'into'] },
+  3: { label: 'Phase 3', words: ['he', 'she', 'we', 'me', 'be', 'was', 'my', 'you', 'her', 'they', 'all', 'are'] },
+  4: { label: 'Phase 4', words: ['said', 'have', 'like', 'so', 'do', 'some', 'come', 'were', 'there', 'little', 'one', 'when', 'out', 'what'] },
+  5: { label: 'Phase 5', words: ['oh', 'their', 'people', 'Mr', 'Mrs', 'looked', 'called', 'asked', 'could', 'water', 'where', 'who', 'again', 'thought', 'through', 'work', 'mouse', 'many', 'laughed', 'because', 'different', 'any', 'eyes', 'friends', 'once', 'please'] },
+};
+
+const CHEERS = [
+  '🎉 Amazing!', '⭐ Brilliant!', '🌟 Super!', '💪 Well done!',
+  '🏆 Champion!', '✨ Fantastic!', '🚀 Awesome!', '🎯 Perfect!',
+  '👏 Great job!', '🌈 Wonderful!'
+];
+const ENCOURAGEMENTS = [
+  "Almost! Let's try again 💪", "Good try! Look carefully 👀",
+  "So close! You've got this! 🌟", "Keep going, you're learning! 📚"
+];
+
+// ==================== STATE ====================
+let state = {
+  phase: 2,
+  wordIndex: 0,
+  streak: 0,
+  score: 0,
+  completed: new Set(),
+  wordOrder: [],
+  isCanvasMode: true,
+  hasDrawn: false,
+  isChecking: false,
+};
+
+// ==================== SPEECH ====================
+function speak(text, rate = 0.85) {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) { resolve(); return; }
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'en-GB';
+    utter.rate = rate;
+    utter.pitch = 1.0;
+    // Try to pick a good English voice
+    const voices = speechSynthesis.getVoices();
+    const preferred = voices.find(v => v.lang === 'en-GB' && v.name.includes('Female'))
+      || voices.find(v => v.lang === 'en-GB')
+      || voices.find(v => v.lang.startsWith('en'));
+    if (preferred) utter.voice = preferred;
+    utter.onend = resolve;
+    utter.onerror = resolve;
+    speechSynthesis.speak(utter);
+  });
+}
+
+// Preload voices
+if (window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+  speechSynthesis.getVoices();
+}
+
+// ==================== CANVAS ====================
+const canvas = document.getElementById('draw-canvas');
+const ctx = canvas.getContext('2d');
+const wrapper = document.getElementById('canvas-wrapper');
+let drawing = false;
+let paths = [];
+let currentPath = [];
+
+function resizeCanvas() {
+  const rect = wrapper.getBoundingClientRect();
+  canvas.width = rect.width * 2; // retina
+  canvas.height = 360;
+  canvas.style.height = '180px';
+  redrawCanvas();
+}
+
+function redrawCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Draw guide lines
+  ctx.strokeStyle = '#E8E4DF';
+  ctx.lineWidth = 1;
+  const midY = canvas.height / 2;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  ctx.moveTo(20, midY);
+  ctx.lineTo(canvas.width - 20, midY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Bottom line
+  ctx.beginPath();
+  ctx.moveTo(20, midY + 60);
+  ctx.lineTo(canvas.width - 20, midY + 60);
+  ctx.stroke();
+
+  // Draw all paths
+  ctx.strokeStyle = '#2D3436';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const path of paths) {
+    if (path.length < 2) continue;
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) {
+      ctx.lineTo(path[i].x, path[i].y);
+    }
+    ctx.stroke();
+  }
+}
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const touch = e.touches ? e.touches[0] : e;
+  return {
+    x: (touch.clientX - rect.left) * scaleX,
+    y: (touch.clientY - rect.top) * scaleY,
+  };
+}
+
+function startDraw(e) {
+  e.preventDefault();
+  if (state.isChecking) return;
+  drawing = true;
+  state.hasDrawn = true;
+  document.getElementById('canvas-placeholder').classList.add('hidden');
+  wrapper.classList.add('drawing');
+  currentPath = [getPos(e)];
+  paths.push(currentPath);
+}
+
+function moveDraw(e) {
+  e.preventDefault();
+  if (!drawing) return;
+  const pos = getPos(e);
+  currentPath.push(pos);
+  // Draw incremental
+  if (currentPath.length > 1) {
+    ctx.strokeStyle = '#2D3436';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(currentPath[currentPath.length - 2].x, currentPath[currentPath.length - 2].y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }
+}
+
+function endDraw(e) {
+  e.preventDefault();
+  drawing = false;
+  wrapper.classList.remove('drawing');
+}
+
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', moveDraw);
+canvas.addEventListener('mouseup', endDraw);
+canvas.addEventListener('mouseleave', endDraw);
+canvas.addEventListener('touchstart', startDraw, { passive: false });
+canvas.addEventListener('touchmove', moveDraw, { passive: false });
+canvas.addEventListener('touchend', endDraw, { passive: false });
+
+function clearCanvas() {
+  paths = [];
+  currentPath = [];
+  state.hasDrawn = false;
+  document.getElementById('canvas-placeholder').classList.remove('hidden');
+  wrapper.classList.remove('correct', 'wrong');
+  redrawCanvas();
+}
+
+// ==================== OCR ====================
+let tesseractWorker = null;
+
+async function initTesseract() {
+  if (tesseractWorker) return;
+  tesseractWorker = await Tesseract.createWorker('eng', 1, {
+    logger: () => {},
+  });
+  await tesseractWorker.setParameters({
+    tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    tessedit_pageseg_mode: '8', // single word
+  });
+}
+
+async function recognizeCanvas() {
+  // Create a clean image from canvas
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = canvas.width;
+  tempCanvas.height = canvas.height;
+  const tempCtx = tempCanvas.getContext('2d');
+  
+  // White background
+  tempCtx.fillStyle = '#FFFFFF';
+  tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+  
+  // Redraw just the strokes, thicker for better OCR
+  tempCtx.strokeStyle = '#000000';
+  tempCtx.lineWidth = 6;
+  tempCtx.lineCap = 'round';
+  tempCtx.lineJoin = 'round';
+  for (const path of paths) {
+    if (path.length < 2) continue;
+    tempCtx.beginPath();
+    tempCtx.moveTo(path[0].x, path[0].y);
+    for (let i = 1; i < path.length; i++) {
+      tempCtx.lineTo(path[i].x, path[i].y);
+    }
+    tempCtx.stroke();
+  }
+
+  const blob = await new Promise(r => tempCanvas.toBlob(r, 'image/png'));
+  if (!tesseractWorker) await initTesseract();
+  const { data } = await tesseractWorker.recognize(blob);
+  return data.text.trim().toLowerCase().replace(/[^a-z]/g, '');
+}
+
+// ==================== CONFETTI ====================
+const confettiCanvas = document.getElementById('confetti-canvas');
+const cCtx = confettiCanvas.getContext('2d');
+let confettiPieces = [];
+let confettiAnimId = null;
+
+function resizeConfetti() {
+  confettiCanvas.width = window.innerWidth;
+  confettiCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeConfetti);
+resizeConfetti();
+
+function launchConfetti() {
+  confettiPieces = [];
+  const colors = ['#FF6B4A', '#4ECDC4', '#FFE66D', '#A78BFA', '#F472B6', '#22C55E'];
+  for (let i = 0; i < 80; i++) {
+    confettiPieces.push({
+      x: Math.random() * confettiCanvas.width,
+      y: -20 - Math.random() * 100,
+      w: 6 + Math.random() * 8,
+      h: 4 + Math.random() * 6,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 6,
+      vy: 2 + Math.random() * 4,
+      rot: Math.random() * 360,
+      rotSpeed: (Math.random() - 0.5) * 12,
+      life: 1,
+    });
+  }
+  if (!confettiAnimId) animateConfetti();
+}
+
+function animateConfetti() {
+  cCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  let alive = false;
+  for (const p of confettiPieces) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1;
+    p.rot += p.rotSpeed;
+    p.life -= 0.008;
+    if (p.life <= 0) continue;
+    alive = true;
+    cCtx.save();
+    cCtx.translate(p.x, p.y);
+    cCtx.rotate(p.rot * Math.PI / 180);
+    cCtx.globalAlpha = p.life;
+    cCtx.fillStyle = p.color;
+    cCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    cCtx.restore();
+  }
+  if (alive) {
+    confettiAnimId = requestAnimationFrame(animateConfetti);
+  } else {
+    confettiAnimId = null;
+  }
+}
+
+// ==================== GAME LOGIC ====================
+function getCurrentWord() {
+  const words = PHASES[state.phase].words;
+  if (state.wordIndex >= state.wordOrder.length) return null;
+  return words[state.wordOrder[state.wordIndex]];
+}
+
+function shufflePhase() {
+  const words = PHASES[state.phase].words;
+  state.wordOrder = [...Array(words.length).keys()];
+  // Fisher-Yates shuffle
+  for (let i = state.wordOrder.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [state.wordOrder[i], state.wordOrder[j]] = [state.wordOrder[j], state.wordOrder[i]];
+  }
+  state.wordIndex = 0;
+  state.completed = new Set();
+}
+
+function updateUI() {
+  document.getElementById('streak').textContent = state.streak;
+  document.getElementById('score').textContent = state.score;
+  const total = PHASES[state.phase].words.length;
+  const done = state.completed.size;
+  document.getElementById('words-done').innerHTML = `${done}<span style="font-size:0.8rem;font-weight:500;color:var(--text-light)">/<span id="words-total">${total}</span></span>`;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  document.getElementById('progress-pct').textContent = pct + '%';
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+function renderPhaseSelector() {
+  const container = document.getElementById('phase-selector');
+  container.innerHTML = '';
+  for (const [key, val] of Object.entries(PHASES)) {
+    const btn = document.createElement('button');
+    btn.className = 'phase-btn' + (parseInt(key) === state.phase ? ' active' : '');
+    btn.textContent = val.label;
+    btn.onclick = () => {
+      state.phase = parseInt(key);
+      shufflePhase();
+      newWord();
+      renderPhaseSelector();
+    };
+    container.appendChild(btn);
+  }
+}
+
+function showFeedback(area, type) {
+  const word = getCurrentWord();
+  if (type === 'correct') {
+    const cheer = CHEERS[Math.floor(Math.random() * CHEERS.length)];
+    area.innerHTML = `<div class="feedback correct">${cheer}<span class="answer-reveal">${word.toUpperCase()}</span></div>`;
+  } else {
+    const enc = ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+    area.innerHTML = `<div class="feedback wrong">${enc}<span class="answer-reveal">${word.toUpperCase()}</span></div>`;
+  }
+}
+
+function showFallback(area) {
+  const word = getCurrentWord();
+  area.innerHTML = `
+    <div class="fallback-prompt">
+      <p>🤔 Couldn't read clearly. The word is:</p>
+      <div class="answer-display">${word.toUpperCase()}</div>
+      <p>Did you write it correctly?</p>
+      <div class="fallback-buttons">
+        <button class="fallback-btn yes" onclick="handleFallback('yes')">✅ Yes!</button>
+        <button class="fallback-btn no" onclick="handleFallback('no')">❌ No</button>
+        <button class="fallback-btn retry" onclick="handleFallback('retry')">🔄 Retry</button>
+      </div>
+    </div>
+  `;
+}
+
+function handleFallback(choice) {
+  const area = document.getElementById('feedback-area');
+  if (choice === 'yes') {
+    handleCorrect();
+  } else if (choice === 'no') {
+    handleWrong();
+  } else {
+    // retry
+    area.innerHTML = '';
+    clearCanvas();
+    document.getElementById('buttons-main').style.display = 'flex';
+    document.getElementById('buttons-next').style.display = 'none';
+  }
+}
+
+function handleCorrect() {
+  const area = document.getElementById('feedback-area');
+  state.streak++;
+  state.score += (state.streak >= 3 ? 3 : state.streak >= 2 ? 2 : 1);
+  state.completed.add(state.wordIndex);
+  showFeedback(area, 'correct');
+  wrapper.classList.add('correct');
+  document.getElementById('keyboard-input').classList.add('correct');
+  launchConfetti();
+  speak(CHEERS[Math.floor(Math.random() * CHEERS.length)].replace(/[^\w\s]/g, ''), 1.0);
+  document.getElementById('buttons-main').style.display = 'none';
+  document.getElementById('buttons-next').style.display = 'flex';
+  updateUI();
+}
+
+function handleWrong() {
+  const area = document.getElementById('feedback-area');
+  state.streak = 0;
+  showFeedback(area, 'wrong');
+  wrapper.classList.add('wrong');
+  document.getElementById('keyboard-input').classList.add('wrong');
+  speak('The word is ' + getCurrentWord(), 0.8);
+  document.getElementById('buttons-main').style.display = 'none';
+  document.getElementById('buttons-next').style.display = 'flex';
+  updateUI();
+}
+
+async function checkAnswer() {
+  if (state.isChecking) return;
+  state.isChecking = true;
+  const word = getCurrentWord().toLowerCase();
+  const area = document.getElementById('feedback-area');
+
+  if (state.isCanvasMode) {
+    if (!state.hasDrawn) {
+      state.isChecking = false;
+      return;
+    }
+    // Show loading
+    document.getElementById('loading').style.display = 'flex';
+    try {
+      const recognized = await recognizeCanvas();
+      document.getElementById('loading').style.display = 'none';
+      
+      if (!recognized || recognized.length === 0) {
+        // Can't recognize at all — show fallback
+        showFallback(area);
+        document.getElementById('buttons-main').style.display = 'none';
+        document.getElementById('buttons-next').style.display = 'none';
+      } else if (recognized === word) {
+        handleCorrect();
+      } else {
+        // Check if it's close (Levenshtein distance 1) — might be OCR error
+        const dist = levenshtein(recognized, word);
+        if (dist <= 1 && word.length > 2) {
+          // Probably OCR error, ask user
+          showFallback(area);
+          document.getElementById('buttons-main').style.display = 'none';
+          document.getElementById('buttons-next').style.display = 'none';
+        } else {
+          handleWrong();
+        }
+      }
+    } catch (err) {
+      console.error('OCR error:', err);
+      document.getElementById('loading').style.display = 'none';
+      showFallback(area);
+      document.getElementById('buttons-main').style.display = 'none';
+      document.getElementById('buttons-next').style.display = 'none';
+    }
+  } else {
+    // Keyboard mode — direct comparison
+    const input = document.getElementById('keyboard-input').value.trim().toLowerCase();
+    if (!input) { state.isChecking = false; return; }
+    if (input === word) {
+      handleCorrect();
+    } else {
+      handleWrong();
+    }
+  }
+  state.isChecking = false;
+}
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (a[i - 1] !== b[j - 1] ? 1 : 0)
+      );
+  return dp[m][n];
+}
+
+function newWord() {
+  // Find next uncompleted word
+  const words = PHASES[state.phase].words;
+  let found = false;
+  for (let i = 0; i < words.length; i++) {
+    const idx = (state.wordIndex + i) % state.wordOrder.length;
+    if (!state.completed.has(idx)) {
+      state.wordIndex = idx;
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    // All done! Reshuffle
+    speak('Amazing! You completed all the words!', 0.9);
+    launchConfetti();
+    setTimeout(() => { launchConfetti(); }, 600);
+    shufflePhase();
+  }
+
+  clearCanvas();
+  document.getElementById('keyboard-input').value = '';
+  document.getElementById('keyboard-input').classList.remove('correct', 'wrong');
+  wrapper.classList.remove('correct', 'wrong');
+  document.getElementById('feedback-area').innerHTML = '';
+  document.getElementById('buttons-main').style.display = 'flex';
+  document.getElementById('buttons-next').style.display = 'none';
+  updateUI();
+}
+
+function skipWord() {
+  state.streak = 0;
+  state.wordIndex = (state.wordIndex + 1) % state.wordOrder.length;
+  newWord();
+  updateUI();
+}
+
+// ==================== INPUT MODE ====================
+function toggleInputMode() {
+  state.isCanvasMode = !state.isCanvasMode;
+  const toggle = document.getElementById('mode-toggle');
+  if (state.isCanvasMode) {
+    document.getElementById('canvas-section').style.display = 'block';
+    document.getElementById('keyboard-section').style.display = 'none';
+    toggle.textContent = 'Switch to keyboard ⌨️';
+  } else {
+    document.getElementById('canvas-section').style.display = 'none';
+    document.getElementById('keyboard-section').style.display = 'block';
+    toggle.textContent = 'Switch to handwriting ✏️';
+    document.getElementById('keyboard-input').focus();
+  }
+}
+
+// ==================== EVENT HANDLERS ====================
+document.getElementById('listen-btn').addEventListener('click', async function() {
+  const word = getCurrentWord();
+  if (!word) return;
+  this.classList.add('speaking');
+  await speak(word, 0.75);
+  // Speak it again slightly faster
+  await speak(word, 0.85);
+  this.classList.remove('speaking');
+});
+
+document.getElementById('btn-check').addEventListener('click', checkAnswer);
+document.getElementById('btn-clear').addEventListener('click', () => {
+  clearCanvas();
+  document.getElementById('keyboard-input').value = '';
+  document.getElementById('keyboard-input').classList.remove('correct', 'wrong');
+  wrapper.classList.remove('correct', 'wrong');
+  document.getElementById('feedback-area').innerHTML = '';
+});
+document.getElementById('btn-skip').addEventListener('click', skipWord);
+document.getElementById('btn-next').addEventListener('click', () => {
+  state.wordIndex = (state.wordIndex + 1) % state.wordOrder.length;
+  newWord();
+});
+document.getElementById('mode-toggle').addEventListener('click', toggleInputMode);
+
+// Keyboard enter to check
+document.getElementById('keyboard-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') checkAnswer();
+});
+
+// ==================== INIT ====================
+window.addEventListener('resize', resizeCanvas);
+
+async function init() {
+  resizeCanvas();
+  renderPhaseSelector();
+  shufflePhase();
+  updateUI();
+
+  // Start loading Tesseract in the background
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('loading-text').textContent = 'Loading handwriting recognition...';
+  try {
+    await initTesseract();
+  } catch (e) {
+    console.warn('Tesseract init failed, keyboard mode will be fallback', e);
+  }
+  document.getElementById('loading').style.display = 'none';
+
+  // Auto-speak first word after a short delay
+  setTimeout(async () => {
+    const word = getCurrentWord();
+    if (word) {
+      document.getElementById('listen-btn').classList.add('speaking');
+      await speak(word, 0.75);
+      document.getElementById('listen-btn').classList.remove('speaking');
+    }
+  }, 800);
+}
+
+init();
+</script>
+</body>
+</html>
