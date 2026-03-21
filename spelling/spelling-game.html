@@ -83,6 +83,7 @@
   .header {
     text-align: center;
     margin-bottom: 20px;
+    position: relative;
   }
   .header h1 {
     font-family: 'Fredoka', sans-serif;
@@ -166,25 +167,49 @@
     box-shadow: 0 3px 12px rgba(167,139,250,0.4);
   }
 
-  /* Accent selector */
-  .accent-selector {
+  /* Audio settings (speed + accent selectors) */
+  .audio-settings {
     display: flex;
+    align-items: center;
     gap: 6px;
-    justify-content: center;
-    margin-top: 10px;
     flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding: 8px 10px;
+    background: #FAF7F4;
+    border-radius: var(--radius-sm);
   }
-  .accent-btn {
+  .audio-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-light);
+    white-space: nowrap;
+  }
+  .audio-divider {
+    width: 1px;
+    height: 16px;
+    background: #DDD9D4;
+    flex-shrink: 0;
+  }
+  .speed-btn, .accent-btn {
     font-family: 'Nunito', sans-serif;
     font-weight: 700;
     font-size: 0.75rem;
-    padding: 5px 12px;
+    padding: 5px 11px;
     border-radius: 50px;
     border: 2px solid #E0DCD7;
     background: var(--card);
     color: var(--text-light);
     cursor: pointer;
     transition: all 0.25s;
+  }
+  .speed-btn:hover { border-color: var(--purple); color: var(--purple); }
+  .speed-btn.active {
+    background: var(--purple);
+    border-color: var(--purple);
+    color: white;
+    box-shadow: 0 3px 10px rgba(167,139,250,0.4);
   }
   .accent-btn:hover { border-color: var(--secondary); color: var(--secondary); }
   .accent-btn.active {
@@ -518,6 +543,39 @@
   }
   .toggle-btn:hover { color: var(--purple); }
 
+  /* Tablet mode toggle button */
+  .tablet-toggle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 0.72rem;
+    padding: 5px 10px;
+    border-radius: 50px;
+    border: 2px solid #E0DCD7;
+    background: var(--card);
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+  .tablet-toggle:hover { border-color: var(--pink); color: var(--pink); }
+  .tablet-toggle.active {
+    background: var(--pink);
+    border-color: var(--pink);
+    color: white;
+    box-shadow: 0 3px 10px rgba(244,114,182,0.4);
+  }
+
+  /* Tablet mode layout */
+  .app.tablet-mode { padding: 12px 12px 20px; }
+  .app.tablet-mode .stats-bar,
+  .app.tablet-mode .phase-selector,
+  .app.tablet-mode .progress-section { display: none; }
+  .app.tablet-mode .header { margin-bottom: 8px; }
+  .app.tablet-mode .header .subtitle { display: none; }
+  .app.tablet-mode .game-card { padding: 12px 12px 16px; }
+
   /* Responsive */
   @media (max-width: 400px) {
     .header h1 { font-size: 1.6rem; }
@@ -535,12 +593,7 @@
   <div class="header">
     <h1>✨ Tricky Words</h1>
     <div class="subtitle">Listen, Write, Learn!</div>
-    <!-- Accent selector -->
-    <div class="accent-selector" id="accent-selector">
-      <button class="accent-btn active" data-lang="en-GB">🇬🇧 British</button>
-      <button class="accent-btn" data-lang="en-US">🇺🇸 American</button>
-      <button class="accent-btn" data-lang="en-AU">🇦🇺 Australian</button>
-    </div>
+    <button class="tablet-toggle" id="tablet-toggle">📐 Tablet</button>
   </div>
 
   <!-- Stats -->
@@ -583,6 +636,20 @@
       <button class="listen-btn" id="listen-btn" title="Listen to the word">🔊</button>
       <div class="prompt-text">
         Tap the speaker to hear the word, then <strong>write it below!</strong>
+      </div>
+    </div>
+
+    <!-- Audio settings -->
+    <div class="audio-settings">
+      <span class="audio-label">Speed:</span>
+      <button class="speed-btn" data-rate="0.6">🐢 Slow</button>
+      <button class="speed-btn active" data-rate="0.85">🚶 Normal</button>
+      <button class="speed-btn" data-rate="1.1">🐇 Fast</button>
+      <div class="audio-divider"></div>
+      <div id="accent-selector" style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="accent-btn active" data-lang="en-GB">🇬🇧 British</button>
+        <button class="accent-btn" data-lang="en-US">🇺🇸 American</button>
+        <button class="accent-btn" data-lang="en-AU">🇦🇺 Australian</button>
       </div>
     </div>
 
@@ -658,18 +725,20 @@ let state = {
   isCanvasMode: true,
   hasDrawn: false,
   isChecking: false,
+  tabletMode: false,
 };
 
 // ==================== SPEECH ====================
 let selectedAccentLang = 'en-GB';
+let selectedSpeed = 0.85;
 
-function speak(text, rate = 0.85) {
+function speak(text, rate = null) {
   return new Promise((resolve) => {
     if (!window.speechSynthesis) { resolve(); return; }
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = selectedAccentLang;
-    utter.rate = rate;
+    utter.rate = rate !== null ? rate : selectedSpeed;
     utter.pitch = 1.0;
     // Try to pick a good voice for the selected accent
     const voices = speechSynthesis.getVoices();
@@ -692,6 +761,32 @@ document.getElementById('accent-selector').addEventListener('click', (e) => {
   selectedAccentLang = btn.dataset.lang;
 });
 
+// Speed selector
+document.querySelectorAll('.speed-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedSpeed = parseFloat(btn.dataset.rate);
+  });
+});
+
+// Tablet mode toggle
+document.getElementById('tablet-toggle').addEventListener('click', function() {
+  state.tabletMode = !state.tabletMode;
+  this.classList.toggle('active', state.tabletMode);
+  document.getElementById('app').classList.toggle('tablet-mode', state.tabletMode);
+  resizeCanvas();
+});
+
+async function autoSpeak() {
+  const word = getCurrentWord();
+  if (!word) return;
+  const btn = document.getElementById('listen-btn');
+  btn.classList.add('speaking');
+  await speak(word);
+  btn.classList.remove('speaking');
+}
+
 // Preload voices
 if (window.speechSynthesis) {
   speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
@@ -709,8 +804,15 @@ let currentPath = [];
 function resizeCanvas() {
   const rect = wrapper.getBoundingClientRect();
   canvas.width = rect.width * 2; // retina
-  canvas.height = 360;
-  canvas.style.height = '180px';
+  if (state.tabletMode) {
+    const vh = window.innerHeight;
+    const targetPx = window.innerWidth < 768 ? Math.round(vh * 0.50) : Math.round(vh * 0.62);
+    canvas.height = targetPx * 2;
+    canvas.style.height = targetPx + 'px';
+  } else {
+    canvas.height = 360;
+    canvas.style.height = '180px';
+  }
   redrawCanvas();
 }
 
@@ -1106,7 +1208,7 @@ function handleWrong() {
   showFeedback(area, 'wrong');
   wrapper.classList.add('wrong');
   document.getElementById('keyboard-input').classList.add('wrong');
-  speak('The word is ' + getCurrentWord(), 0.8);
+  speak('The word is ' + getCurrentWord());
   document.getElementById('buttons-main').style.display = 'none';
   document.getElementById('buttons-next').style.display = 'flex';
   updateUI();
@@ -1188,7 +1290,7 @@ function levenshtein(a, b) {
   return dp[m][n];
 }
 
-function newWord() {
+async function newWord() {
   // Find next uncompleted word
   const words = PHASES[state.phase].words;
   let found = false;
@@ -1201,10 +1303,10 @@ function newWord() {
     }
   }
   if (!found) {
-    // All done! Reshuffle
-    speak('Amazing! You completed all the words!', 0.9);
+    // All done! Reshuffle — await so the cheer finishes before the new word is spoken
     launchConfetti();
     setTimeout(() => { launchConfetti(); }, 600);
+    await speak('Amazing! You completed all the words!', 0.9);
     shufflePhase();
   }
 
@@ -1216,6 +1318,7 @@ function newWord() {
   document.getElementById('buttons-main').style.display = 'flex';
   document.getElementById('buttons-next').style.display = 'none';
   updateUI();
+  autoSpeak();
 }
 
 function skipWord() {
@@ -1246,9 +1349,9 @@ document.getElementById('listen-btn').addEventListener('click', async function()
   const word = getCurrentWord();
   if (!word) return;
   this.classList.add('speaking');
-  await speak(word, 0.75);
-  // Speak it again slightly faster
-  await speak(word, 0.85);
+  await speak(word);
+  // Speak it again for emphasis
+  await speak(word);
   this.classList.remove('speaking');
 });
 
@@ -1291,15 +1394,7 @@ async function init() {
   }
   document.getElementById('loading').style.display = 'none';
 
-  // Auto-speak first word after a short delay
-  setTimeout(async () => {
-    const word = getCurrentWord();
-    if (word) {
-      document.getElementById('listen-btn').classList.add('speaking');
-      await speak(word, 0.75);
-      document.getElementById('listen-btn').classList.remove('speaking');
-    }
-  }, 800);
+  autoSpeak();
 }
 
 init();
