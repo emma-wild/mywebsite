@@ -1189,11 +1189,11 @@ function startDraw(e) {
   if (e.pointerType === 'pen') e.preventDefault();
 
   // Auto-detect stylus and enable pencil-only mode
-  if (e.pointerType === 'pen' && !state.pencilOnly) {
-    state.pencilOnly = true;
-    updatePencilToggleUI();
-    showToast('✏️ Pencil mode activated');
-  }
+  //if (e.pointerType === 'pen' && !state.pencilOnly) {
+  //  state.pencilOnly = true;
+  //  updatePencilToggleUI();
+  //  showToast('✏️ Pencil mode activated');
+  //}
 
   // In pencil-only mode, ignore non-pen input (don't preventDefault — allow finger scroll)
   if (state.pencilOnly && e.pointerType !== 'pen') return;
