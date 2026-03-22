@@ -986,7 +986,6 @@ function startDraw(e) {
   if (state.pencilOnly && e.pointerType !== 'pen') return;
 
   e.preventDefault();
-  canvas.setPointerCapture(e.pointerId);
   if (state.isChecking) return;
   drawing = true;
   state.hasDrawn = true;
