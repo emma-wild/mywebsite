@@ -83,7 +83,6 @@
   .header {
     text-align: center;
     margin-bottom: 20px;
-    position: relative;
   }
   .header h1 {
     font-family: 'Fredoka', sans-serif;
@@ -564,11 +563,10 @@
     box-shadow: 0 3px 10px rgba(244,114,182,0.4);
   }
   .header-toggles {
-    position: absolute;
-    top: 0;
-    right: 0;
     display: flex;
-    gap: 4px;
+    justify-content: right;
+    gap: 6px;
+    margin-top: 10px;
   }
 
   /* Tablet mode layout */
@@ -1029,9 +1027,11 @@ canvas.addEventListener('pointerup', endDraw);
 canvas.addEventListener('pointerleave', endDraw);
 canvas.addEventListener('pointercancel', endDraw);
 
-// Palm rejection: when pencil-only mode is ON, block all finger touches globally
+// Palm rejection: when pencil-only mode is ON, block finger touches globally,
+// but allow Apple Pencil touches (touchType === 'stylus') so buttons still work.
 document.addEventListener('touchstart', function(e) {
   if (!state.pencilOnly) return;
+  if (e.touches.length > 0 && e.touches[0].touchType === 'stylus') return;
   e.preventDefault();
 }, { passive: false, capture: true });
 
