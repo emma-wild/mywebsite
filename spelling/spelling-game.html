@@ -77,6 +77,8 @@
     padding: 20px 16px 40px;
     position: relative;
     z-index: 1;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   /* Header */
@@ -675,6 +677,7 @@
       <button class="tablet-toggle" id="pencil-toggle">✏️ Pencil</button>
       <button class="tablet-toggle" id="tablet-toggle">📐 Tablet</button>
       <button class="tablet-toggle" id="landscape-toggle">🔄 Landscape</button>
+      <button class="tablet-toggle" id="debug-toggle">🐛 Debug</button>
     </div>
   </div>
 
@@ -811,6 +814,7 @@ let state = {
   pencilOnly: false,
   landscapeMode: false,
   landscapeManual: false,
+  debugMode: false,
 };
 
 // ==================== SPEECH ====================
@@ -876,6 +880,12 @@ document.getElementById('tablet-toggle').addEventListener('click', function() {
 document.getElementById('pencil-toggle').addEventListener('click', function() {
   state.pencilOnly = !state.pencilOnly;
   updatePencilToggleUI();
+});
+
+// Debug toggle
+document.getElementById('debug-toggle').addEventListener('click', function() {
+  state.debugMode = !state.debugMode;
+  this.classList.toggle('active', state.debugMode);
 });
 
 // Landscape toggle
@@ -1312,13 +1322,17 @@ function showFeedback(area, type) {
   }
 }
 
-function showFallback(area) {
+function showFallback(area, recognized) {
   const word = getCurrentWord();
+  const debugLine = state.debugMode && recognized !== undefined
+    ? `<p style="font-size:0.8rem;color:var(--text-light);margin-top:6px;">I've read: '<strong>${recognized || '(nothing)'}</strong>'</p>`
+    : '';
   area.innerHTML = `
     <div class="fallback-prompt">
       <p>🤔 Couldn't read clearly. The word is:</p>
       <div class="answer-display">${word.toUpperCase()}</div>
       <p>Did you write it correctly?</p>
+      ${debugLine}
       <div class="fallback-buttons">
         <button class="fallback-btn yes" onclick="handleFallback('yes')">✅ Yes!</button>
         <button class="fallback-btn no" onclick="handleFallback('no')">❌ No</button>
@@ -1389,7 +1403,7 @@ async function checkAnswer() {
       
       if (!recognized || recognized.length === 0) {
         // Can't recognize at all — show fallback
-        showFallback(area);
+        showFallback(area, recognized);
         document.getElementById('buttons-main').style.display = 'none';
         document.getElementById('buttons-next').style.display = 'none';
       } else if (recognized === word) {
@@ -1404,7 +1418,7 @@ async function checkAnswer() {
           || (word.length <= 5 && dist <= 2)
           || (word.length > 5 && dist <= 2);
         if (isUncertain) {
-          showFallback(area);
+          showFallback(area, recognized);
           document.getElementById('buttons-main').style.display = 'none';
           document.getElementById('buttons-next').style.display = 'none';
         } else {
@@ -1414,7 +1428,7 @@ async function checkAnswer() {
     } catch (err) {
       console.error('OCR error:', err);
       document.getElementById('loading').style.display = 'none';
-      showFallback(area);
+      showFallback(area, '');
       document.getElementById('buttons-main').style.display = 'none';
       document.getElementById('buttons-next').style.display = 'none';
     }
