@@ -662,6 +662,123 @@
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+
+  /* Debug voice label */
+  .debug-voice-label {
+    width: 100%;
+    font-size: 0.72rem;
+    color: var(--text-light);
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px dashed #DDD9D4;
+  }
+
+  /* iOS hint */
+  .ios-hint {
+    background: #FFFBEB;
+    border: 1.5px solid #FCD34D;
+    border-radius: var(--radius-sm);
+    padding: 10px 32px 10px 12px;
+    margin-bottom: 12px;
+    font-size: 0.82rem;
+    color: #92400E;
+    line-height: 1.5;
+    position: relative;
+  }
+  .ios-hint-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    color: #92400E;
+    opacity: 0.6;
+  }
+  .ios-hint-close:hover { opacity: 1; }
+
+  /* Voice picker modal */
+  .voice-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(45,52,54,0.5);
+    z-index: 150;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    animation: fade-in 0.2s ease;
+  }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .voice-modal-card {
+    background: var(--card);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 20px 16px 32px;
+    width: 100%;
+    max-width: 520px;
+    max-height: 70vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+  }
+  .voice-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .voice-modal-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .voice-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    color: var(--text-light);
+    line-height: 1;
+  }
+  .voice-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 2px solid transparent;
+  }
+  .voice-row:hover { background: #F5F1EE; }
+  .voice-row.active { border-color: var(--secondary); background: #F0FAFA; }
+  .voice-row-name { flex: 1; font-weight: 700; font-size: 0.88rem; color: var(--text); }
+  .voice-row-lang { font-size: 0.75rem; color: var(--text-light); }
+  .voice-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 50px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .voice-badge.premium  { background: #FEF3C7; color: #92400E; }
+  .voice-badge.enhanced { background: #EDE9FE; color: #5B21B6; }
+  .voice-preview-btn {
+    background: none;
+    border: 2px solid #E0DCD7;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.2s;
+  }
+  .voice-preview-btn:hover { border-color: var(--primary); }
 </style>
 </head>
 <body>
@@ -716,6 +833,14 @@
 
   <!-- Game card -->
   <div class="game-card">
+    <!-- iOS voice quality hint (shown only on iOS when no Enhanced/Premium voices found) -->
+    <div class="ios-hint" id="ios-hint" style="display:none;">
+      <button class="ios-hint-close" id="ios-hint-close">✕</button>
+      💡 <strong>Tip:</strong> For better pronunciation, go to<br>
+      <em>Settings → Accessibility → Spoken Content → Voices → English</em><br>
+      and download an "Enhanced" or "Premium" voice.
+    </div>
+
     <!-- Word prompt -->
     <div class="word-prompt">
       <button class="listen-btn" id="listen-btn" title="Listen to the word">🔊</button>
@@ -736,6 +861,8 @@
         <button class="accent-btn" data-lang="en-US">🇺🇸 American</button>
         <button class="accent-btn" data-lang="en-AU">🇦🇺 Australian</button>
       </div>
+      <button class="accent-btn" id="voice-picker-btn" title="Choose a specific voice">🎤</button>
+      <div class="debug-voice-label" id="debug-voice-label" style="display:none;"></div>
     </div>
 
     <!-- Input mode toggle -->
@@ -815,11 +942,52 @@ let state = {
   landscapeMode: false,
   landscapeManual: false,
   debugMode: false,
+  voiceHintDismissed: false,
 };
 
 // ==================== SPEECH ====================
 let selectedAccentLang = 'en-GB';
 let selectedSpeed = 0.85;
+let selectedVoice = null;
+let voicesReady = false;
+
+function pickBestVoice(lang) {
+  const voices = speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const langPrefix = lang.split('-')[0]; // 'en'
+  const knownGood = [
+    'samantha', 'daniel', 'karen', 'moira', 'martha',
+    'stephanie', 'serena', 'zoe',
+    'google uk english female', 'google us english',
+    'microsoft libby', 'microsoft ryan',
+  ];
+  const scored = voices
+    .filter(v => v.lang.startsWith(langPrefix))
+    .map(v => {
+      let score = 0;
+      const name = v.name.toLowerCase();
+      if (name.includes('premium'))  score += 100;
+      if (name.includes('enhanced')) score += 90;
+      if (!v.localService)           score += 30;
+      if (v.lang === lang)           score += 50;
+      if (knownGood.some(g => name.includes(g))) score += 20;
+      return { voice: v, score };
+    })
+    .sort((a, b) => b.score - a.score);
+  return scored.length > 0 ? scored[0].voice : null;
+}
+
+function onVoicesReady() {
+  voicesReady = true;
+  selectedVoice = pickBestVoice(selectedAccentLang);
+  updateDebugVoiceLabel();
+  maybeShowIOSHint();
+}
+
+if (window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = onVoicesReady;
+  if (speechSynthesis.getVoices().length > 0) onVoicesReady();
+}
 
 function speak(text, rate = null) {
   return new Promise((resolve) => {
@@ -829,16 +997,41 @@ function speak(text, rate = null) {
     utter.lang = selectedAccentLang;
     utter.rate = rate !== null ? rate : selectedSpeed;
     utter.pitch = 1.0;
-    // Try to pick a good voice for the selected accent
-    const voices = speechSynthesis.getVoices();
-    const preferred = voices.find(v => v.lang === selectedAccentLang && v.name.includes('Female'))
-      || voices.find(v => v.lang === selectedAccentLang)
-      || voices.find(v => v.lang.startsWith('en'));
-    if (preferred) utter.voice = preferred;
+    if (selectedVoice) {
+      utter.voice = selectedVoice;
+    } else {
+      // Voices not ready yet — basic fallback
+      const voices = speechSynthesis.getVoices();
+      const fallback = voices.find(v => v.lang === selectedAccentLang)
+        || voices.find(v => v.lang.startsWith('en'));
+      if (fallback) utter.voice = fallback;
+    }
     utter.onend = resolve;
     utter.onerror = resolve;
     speechSynthesis.speak(utter);
   });
+}
+
+function updateDebugVoiceLabel() {
+  const el = document.getElementById('debug-voice-label');
+  if (!el) return;
+  if (state.debugMode && selectedVoice) {
+    el.textContent = `Voice: ${selectedVoice.name} [${selectedVoice.lang}]`;
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function maybeShowIOSHint() {
+  if (state.voiceHintDismissed) return;
+  if (!/iPad|iPhone|iPod/.test(navigator.userAgent)) return;
+  const voices = speechSynthesis.getVoices();
+  const hasGoodVoice = voices.some(v => {
+    const n = v.name.toLowerCase();
+    return n.includes('premium') || n.includes('enhanced');
+  });
+  if (!hasGoodVoice) document.getElementById('ios-hint').style.display = 'block';
 }
 
 // Accent selector
@@ -848,6 +1041,8 @@ document.getElementById('accent-selector').addEventListener('click', (e) => {
   document.querySelectorAll('.accent-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedAccentLang = btn.dataset.lang;
+  selectedVoice = pickBestVoice(selectedAccentLang);
+  updateDebugVoiceLabel();
 });
 
 // Speed selector
@@ -886,6 +1081,7 @@ document.getElementById('pencil-toggle').addEventListener('click', function() {
 document.getElementById('debug-toggle').addEventListener('click', function() {
   state.debugMode = !state.debugMode;
   this.classList.toggle('active', state.debugMode);
+  updateDebugVoiceLabel();
 });
 
 // Landscape toggle
@@ -1543,6 +1739,84 @@ document.getElementById('mode-toggle').addEventListener('click', toggleInputMode
 // Keyboard enter to check
 document.getElementById('keyboard-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') checkAnswer();
+});
+
+// ==================== VOICE PICKER ====================
+document.getElementById('voice-picker-btn').addEventListener('click', openVoicePicker);
+
+function openVoicePicker() {
+  const allVoices = speechSynthesis.getVoices()
+    .filter(v => v.lang.startsWith('en'))
+    .sort((a, b) => {
+      const score = v => {
+        const n = v.name.toLowerCase();
+        if (n.includes('premium')) return 3;
+        if (n.includes('enhanced')) return 2;
+        if (!v.localService) return 1;
+        return 0;
+      };
+      return score(b) - score(a);
+    });
+
+  const rows = allVoices.map(v => {
+    const nameLower = v.name.toLowerCase();
+    const badge = nameLower.includes('premium')
+      ? '<span class="voice-badge premium">Premium</span>'
+      : nameLower.includes('enhanced')
+        ? '<span class="voice-badge enhanced">Enhanced</span>'
+        : '';
+    const isActive = selectedVoice && selectedVoice.name === v.name;
+    const safeName = v.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `
+      <div class="voice-row${isActive ? ' active' : ''}" onclick="selectVoiceByName('${safeName}')">
+        <span class="voice-row-name">${v.name}</span>
+        ${badge}
+        <span class="voice-row-lang">${v.lang}</span>
+        <button class="voice-preview-btn" onclick="event.stopPropagation();previewVoiceByName('${safeName}')">▶️</button>
+      </div>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'voice-modal-overlay';
+  overlay.id = 'voice-modal';
+  overlay.innerHTML = `
+    <div class="voice-modal-card">
+      <div class="voice-modal-header">
+        <span class="voice-modal-title">🎤 Choose a voice</span>
+        <button class="voice-modal-close" onclick="closeVoicePicker()">✕</button>
+      </div>
+      ${rows || '<p style="color:var(--text-light);text-align:center;padding:16px">No voices available yet</p>'}
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeVoicePicker(); });
+  document.body.appendChild(overlay);
+}
+
+function closeVoicePicker() {
+  const el = document.getElementById('voice-modal');
+  if (el) el.remove();
+}
+
+function selectVoiceByName(name) {
+  const v = speechSynthesis.getVoices().find(v => v.name === name);
+  if (v) { selectedVoice = v; updateDebugVoiceLabel(); }
+  closeVoicePicker();
+}
+
+function previewVoiceByName(name) {
+  const v = speechSynthesis.getVoices().find(v => v.name === name);
+  if (!v) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(getCurrentWord() || 'hello');
+  utter.voice = v;
+  utter.lang = v.lang;
+  utter.rate = selectedSpeed;
+  window.speechSynthesis.speak(utter);
+}
+
+// iOS hint dismiss
+document.getElementById('ios-hint-close').addEventListener('click', function() {
+  state.voiceHintDismissed = true;
+  document.getElementById('ios-hint').style.display = 'none';
 });
 
 // ==================== ORIENTATION / AUTO-LANDSCAPE ====================
