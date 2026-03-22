@@ -545,9 +545,6 @@
 
   /* Tablet mode toggle button */
   .tablet-toggle {
-    position: absolute;
-    top: 0;
-    right: 0;
     font-family: 'Nunito', sans-serif;
     font-weight: 700;
     font-size: 0.72rem;
@@ -566,6 +563,13 @@
     color: white;
     box-shadow: 0 3px 10px rgba(244,114,182,0.4);
   }
+  .header-toggles {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    gap: 4px;
+  }
 
   /* Tablet mode layout */
   .app.tablet-mode { padding: 12px 12px 20px; }
@@ -576,11 +580,87 @@
   .app.tablet-mode .header .subtitle { display: none; }
   .app.tablet-mode .game-card { padding: 12px 12px 16px; }
 
+  /* Landscape mode */
+  .app.landscape-mode {
+    max-width: 100%;
+    padding: 8px 10px 10px;
+  }
+
+  .app.landscape-mode .game-card {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 10px;
+    padding: 10px;
+    min-height: calc(100vh - 70px);
+    align-items: start;
+  }
+
+  /* Canvas spans entire left column */
+  .app.landscape-mode #canvas-section {
+    grid-column: 1;
+    grid-row: 1 / 99;
+  }
+
+  .app.landscape-mode .canvas-wrapper {
+    height: calc(100vh - 90px);
+  }
+
+  .app.landscape-mode canvas {
+    height: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Right-column items */
+  .app.landscape-mode .audio-settings { grid-column: 2; }
+  .app.landscape-mode .word-prompt { grid-column: 2; }
+  .app.landscape-mode .input-mode-toggle { grid-column: 2; }
+  .app.landscape-mode #keyboard-section { grid-column: 2; }
+  .app.landscape-mode #feedback-area { grid-column: 2; }
+  .app.landscape-mode #buttons-main { grid-column: 2; }
+  .app.landscape-mode #buttons-next { grid-column: 2; }
+
+  /* Narrow landscape (< 900px): tighter columns */
+  @media (max-width: 900px) {
+    .app.landscape-mode .game-card {
+      grid-template-columns: 1.2fr 1fr;
+    }
+  }
+
+  /* Phone landscape (height < 500px): compact controls */
+  @media (max-height: 500px) {
+    .app.landscape-mode .audio-settings { padding: 4px 8px; }
+    .app.landscape-mode .listen-btn { width: 44px; height: 44px; font-size: 1.3rem; }
+    .app.landscape-mode .btn { padding: 10px; font-size: 0.9rem; }
+  }
+
   /* Responsive */
   @media (max-width: 400px) {
     .header h1 { font-size: 1.6rem; }
     .stat-value { font-size: 1.2rem; }
     .listen-btn { width: 54px; height: 54px; font-size: 1.5rem; }
+  }
+
+  /* Toast notification */
+  #toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(45,52,54,0.88);
+    color: white;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    padding: 10px 20px;
+    border-radius: 50px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 200;
+  }
+  #toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
 </style>
 </head>
@@ -593,7 +673,11 @@
   <div class="header">
     <h1>✨ Tricky Words</h1>
     <div class="subtitle">Listen, Write, Learn!</div>
-    <button class="tablet-toggle" id="tablet-toggle">📐 Tablet</button>
+    <div class="header-toggles">
+      <button class="tablet-toggle" id="pencil-toggle">✏️ Pencil</button>
+      <button class="tablet-toggle" id="tablet-toggle">📐 Tablet</button>
+      <button class="tablet-toggle" id="landscape-toggle">🔄 Landscape</button>
+    </div>
   </div>
 
   <!-- Stats -->
@@ -726,6 +810,9 @@ let state = {
   hasDrawn: false,
   isChecking: false,
   tabletMode: false,
+  pencilOnly: false,
+  landscapeMode: false,
+  landscapeManual: false,
 };
 
 // ==================== SPEECH ====================
@@ -773,8 +860,31 @@ document.querySelectorAll('.speed-btn').forEach(btn => {
 // Tablet mode toggle
 document.getElementById('tablet-toggle').addEventListener('click', function() {
   state.tabletMode = !state.tabletMode;
+  state.landscapeManual = false;  // reset manual override
+
   this.classList.toggle('active', state.tabletMode);
   document.getElementById('app').classList.toggle('tablet-mode', state.tabletMode);
+
+  if (state.tabletMode && landscapeQuery.matches) {
+    state.landscapeMode = true;
+  } else if (!state.tabletMode) {
+    state.landscapeMode = false;
+  }
+  updateLandscapeUI();
+  resizeCanvas();
+});
+
+// Pencil-only toggle
+document.getElementById('pencil-toggle').addEventListener('click', function() {
+  state.pencilOnly = !state.pencilOnly;
+  updatePencilToggleUI();
+});
+
+// Landscape toggle
+document.getElementById('landscape-toggle').addEventListener('click', function() {
+  state.landscapeMode = !state.landscapeMode;
+  state.landscapeManual = true;
+  updateLandscapeUI();
   resizeCanvas();
 });
 
@@ -804,7 +914,11 @@ let currentPath = [];
 function resizeCanvas() {
   const rect = wrapper.getBoundingClientRect();
   canvas.width = rect.width * 2; // retina
-  if (state.tabletMode) {
+  if (state.landscapeMode) {
+    // Height driven by CSS; just sync the internal buffer height
+    canvas.height = rect.height * 2 || canvas.height;
+    // Don't override canvas.style.height — CSS controls it
+  } else if (state.tabletMode) {
     const vh = window.innerHeight;
     const targetPx = window.innerWidth < 768 ? Math.round(vh * 0.50) : Math.round(vh * 0.62);
     canvas.height = targetPx * 2;
@@ -854,33 +968,47 @@ function getPos(e) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
-  const touch = e.touches ? e.touches[0] : e;
   return {
-    x: (touch.clientX - rect.left) * scaleX,
-    y: (touch.clientY - rect.top) * scaleY,
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY,
   };
 }
 
 function startDraw(e) {
+  // Auto-detect stylus and enable pencil-only mode
+  if (e.pointerType === 'pen' && !state.pencilOnly) {
+    state.pencilOnly = true;
+    updatePencilToggleUI();
+    showToast('✏️ Pencil mode activated');
+  }
+
+  // In pencil-only mode, ignore non-pen input
+  if (state.pencilOnly && e.pointerType !== 'pen') return;
+
   e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
   if (state.isChecking) return;
   drawing = true;
   state.hasDrawn = true;
   document.getElementById('canvas-placeholder').classList.add('hidden');
   wrapper.classList.add('drawing');
-  currentPath = [getPos(e)];
+  const pos = getPos(e);
+  currentPath = [pos];
   paths.push(currentPath);
 }
 
 function moveDraw(e) {
-  e.preventDefault();
+  if (state.pencilOnly && e.pointerType !== 'pen') return;
   if (!drawing) return;
+  e.preventDefault();
   const pos = getPos(e);
+  // Vary line width by pressure if available
+  const pressure = e.pressure > 0 ? e.pressure : 0.5;
+  const lineW = 2 + pressure * 6;
   currentPath.push(pos);
-  // Draw incremental
   if (currentPath.length > 1) {
     ctx.strokeStyle = '#2D3436';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = lineW;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
@@ -891,18 +1019,22 @@ function moveDraw(e) {
 }
 
 function endDraw(e) {
-  e.preventDefault();
+  if (state.pencilOnly && e.pointerType !== 'pen') return;
   drawing = false;
   wrapper.classList.remove('drawing');
 }
 
-canvas.addEventListener('mousedown', startDraw);
-canvas.addEventListener('mousemove', moveDraw);
-canvas.addEventListener('mouseup', endDraw);
-canvas.addEventListener('mouseleave', endDraw);
-canvas.addEventListener('touchstart', startDraw, { passive: false });
-canvas.addEventListener('touchmove', moveDraw, { passive: false });
-canvas.addEventListener('touchend', endDraw, { passive: false });
+canvas.addEventListener('pointerdown', startDraw);
+canvas.addEventListener('pointermove', moveDraw);
+canvas.addEventListener('pointerup', endDraw);
+canvas.addEventListener('pointerleave', endDraw);
+canvas.addEventListener('pointercancel', endDraw);
+
+// Palm rejection: when pencil-only mode is ON, block all finger touches globally
+document.addEventListener('touchstart', function(e) {
+  if (!state.pencilOnly) return;
+  e.preventDefault();
+}, { passive: false, capture: true });
 
 function clearCanvas() {
   paths = [];
@@ -911,6 +1043,31 @@ function clearCanvas() {
   document.getElementById('canvas-placeholder').classList.remove('hidden');
   wrapper.classList.remove('correct', 'wrong');
   redrawCanvas();
+}
+
+function updatePencilToggleUI() {
+  const btn = document.getElementById('pencil-toggle');
+  if (!btn) return;
+  btn.classList.toggle('active', state.pencilOnly);
+}
+
+function showToast(msg) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.classList.add('visible');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('visible'), 2000);
+}
+
+function updateLandscapeUI() {
+  const btn = document.getElementById('landscape-toggle');
+  if (btn) btn.classList.toggle('active', state.landscapeMode);
+  document.getElementById('app').classList.toggle('landscape-mode', state.landscapeMode);
 }
 
 // ==================== OCR ====================
@@ -1374,6 +1531,18 @@ document.getElementById('mode-toggle').addEventListener('click', toggleInputMode
 document.getElementById('keyboard-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') checkAnswer();
 });
+
+// ==================== ORIENTATION / AUTO-LANDSCAPE ====================
+const landscapeQuery = window.matchMedia('(orientation: landscape)');
+
+function onOrientationChange(e) {
+  if (!state.tabletMode || state.landscapeManual) return;
+  state.landscapeMode = e.matches;
+  updateLandscapeUI();
+  resizeCanvas();
+}
+
+landscapeQuery.addEventListener('change', onOrientationChange);
 
 // ==================== INIT ====================
 window.addEventListener('resize', resizeCanvas);
