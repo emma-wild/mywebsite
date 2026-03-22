@@ -283,6 +283,9 @@
     background: var(--canvas-bg);
     margin-bottom: 16px;
     touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
     transition: border-color 0.3s;
   }
   .canvas-wrapper.drawing { border-color: var(--secondary); }
@@ -294,6 +297,9 @@
     width: 100%;
     cursor: crosshair;
     touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   .canvas-placeholder {
@@ -1179,6 +1185,9 @@ function getPos(e) {
 }
 
 function startDraw(e) {
+  // Always preventDefault for pen — stops Safari double-tap gesture recogniser
+  if (e.pointerType === 'pen') e.preventDefault();
+
   // Auto-detect stylus and enable pencil-only mode
   if (e.pointerType === 'pen' && !state.pencilOnly) {
     state.pencilOnly = true;
@@ -1186,7 +1195,7 @@ function startDraw(e) {
     showToast('✏️ Pencil mode activated');
   }
 
-  // In pencil-only mode, ignore non-pen input
+  // In pencil-only mode, ignore non-pen input (don't preventDefault — allow finger scroll)
   if (state.pencilOnly && e.pointerType !== 'pen') return;
 
   e.preventDefault();
@@ -1201,9 +1210,9 @@ function startDraw(e) {
 }
 
 function moveDraw(e) {
+  e.preventDefault();
   if (state.pencilOnly && e.pointerType !== 'pen') return;
   if (!drawing) return;
-  e.preventDefault();
   const pos = getPos(e);
   // Vary line width by pressure if available
   const pressure = e.pressure > 0 ? e.pressure : 0.5;
@@ -1222,13 +1231,14 @@ function moveDraw(e) {
 }
 
 function endDraw(e) {
+  e.preventDefault();
   if (state.pencilOnly && e.pointerType !== 'pen') return;
   drawing = false;
   wrapper.classList.remove('drawing');
 }
 
-canvas.addEventListener('pointerdown', startDraw);
-canvas.addEventListener('pointermove', moveDraw);
+canvas.addEventListener('pointerdown', startDraw, { passive: false });
+canvas.addEventListener('pointermove', moveDraw, { passive: false });
 canvas.addEventListener('pointerup', endDraw);
 canvas.addEventListener('pointerleave', endDraw);
 canvas.addEventListener('pointercancel', endDraw);
