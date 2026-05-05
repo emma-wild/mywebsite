@@ -1,0 +1,254 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+#app { padding: 1rem 0; }
+#setup { display: flex; gap: 8px; margin-bottom: 1rem; align-items: flex-start; flex-wrap: wrap; }
+#textInput { flex: 1; min-width: 200px; padding: 8px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); font-family: var(--font-mono); font-size: 14px; background: var(--color-background-primary); color: var(--color-text-primary); resize: none; height: 60px; }
+#startBtn { padding: 8px 20px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); cursor: pointer; font-size: 14px; white-space: nowrap; }
+#startBtn:hover { background: var(--color-background-secondary); }
+
+#trainer { display: none; }
+
+#textDisplay { font-family: var(--font-mono); font-size: 22px; line-height: 1.8; letter-spacing: 0.05em; background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 16px 20px; margin-bottom: 1rem; min-height: 80px; }
+.char { position: relative; }
+.char.done { color: var(--color-text-success); }
+.char.wrong { color: var(--color-text-danger); background: var(--color-background-danger); border-radius: 2px; }
+.char.current { background: #378ADD33; border-radius: 2px; }
+.char.space-vis { border-bottom: 2px solid currentColor; }
+
+#stats { display: flex; gap: 12px; margin-bottom: 1rem; font-size: 13px; color: var(--color-text-secondary); }
+.stat { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 6px 14px; }
+.stat b { color: var(--color-text-primary); font-weight: 500; }
+
+#keyboard { user-select: none; }
+.kb-row { display: flex; gap: 5px; margin-bottom: 5px; justify-content: center; }
+.key {
+  display: flex; align-items: center; justify-content: center;
+  height: 40px; min-width: 36px; padding: 0 6px;
+  border-radius: 6px;
+  border: 0.5px solid var(--color-border-secondary);
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  font-size: 12px; font-weight: 500;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  cursor: default;
+  position: relative;
+}
+.key.w2 { min-width: 64px; }
+.key.w3 { min-width: 90px; }
+.key.w4 { min-width: 116px; }
+.key.space-key { min-width: 280px; }
+.key.mod { background: var(--color-background-secondary); font-size: 11px; }
+
+.key.highlight {
+  background: #378ADD !important;
+  color: #fff !important;
+  border-color: #185FA5 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px #378ADD55;
+  z-index: 2;
+}
+.key.highlight::after {
+  content: '';
+  position: absolute;
+  bottom: -6px; left: 50%; transform: translateX(-50%);
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #378ADD;
+  animation: pulse 0.6s infinite alternate;
+}
+@keyframes pulse { from { opacity: 0.4; transform: translateX(-50%) scale(0.8); } to { opacity: 1; transform: translateX(-50%) scale(1.2); } }
+
+.key.correct-flash { background: var(--color-background-success) !important; border-color: var(--color-border-success) !important; color: var(--color-text-success) !important; transition: none; }
+.key.wrong-flash { background: var(--color-background-danger) !important; border-color: var(--color-border-danger) !important; color: var(--color-text-danger) !important; transition: none; }
+
+#hint { text-align: center; font-size: 13px; color: var(--color-text-secondary); min-height: 20px; margin-bottom: 8px; }
+
+#resultBanner { display: none; background: var(--color-background-success); border-radius: var(--border-radius-lg); padding: 16px 20px; margin-bottom: 1rem; text-align: center; }
+#resultBanner p { color: var(--color-text-success); font-size: 15px; }
+#resetBtn { margin-top: 10px; padding: 7px 18px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-success); background: transparent; color: var(--color-text-success); cursor: pointer; font-size: 13px; }
+</style>
+
+<div id="app">
+  <h2 class="sr-only">Typing trainer with keyboard hints</h2>
+  <div id="setup">
+    <textarea id="textInput" placeholder="Enter text to practice&#10;e.g.: fjf jfj ffjj jjff">fjf jfj ffjj jjff fjjf jffj ff jj fj jf</textarea>
+    <button id="startBtn">Start ▶</button>
+  </div>
+
+  <div id="trainer">
+    <div id="stats">
+      <div class="stat">Progress: <b id="progStat">0%</b></div>
+      <div class="stat">Errors: <b id="errStat">0</b></div>
+      <div class="stat">Accuracy: <b id="accStat">—</b></div>
+    </div>
+    <div id="textDisplay"></div>
+    <div id="hint"></div>
+    <div id="keyboard"></div>
+    <div id="resultBanner">
+      <p id="resultMsg"></p>
+      <button id="resetBtn">Try again ↺</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ROWS = [
+  ['`','1','2','3','4','5','6','7','8','9','0','-','=','Del'],
+  ['Tab','Q','W','E','R','T','Y','U','I','O','P','[',']','\\'],
+  ['Caps','A','S','D','F','G','H','J','K','L',';',"'",'Enter'],
+  ['Shift','Z','X','C','V','B','N','M',',','.','/',  'Shift2'],
+  ['Ctrl','Alt','Cmd','SPACE','Cmd2','Alt2','Ctrl2']
+];
+const WIDE = { 'Del':2, 'Tab':1.7, '\\':1.7, 'Caps':2.2, 'Enter':2.5, 'Shift':2.8, 'Shift2':2.8, 'Ctrl':1.4,'Alt':1.2,'Cmd':1.4,'Cmd2':1.4,'Alt2':1.2,'Ctrl2':1.4, 'SPACE': 7.8 };
+const LABELS = { 'SPACE':'', 'Shift2':'Shift', 'Cmd2':'Cmd', 'Alt2':'Alt', 'Ctrl2':'Ctrl' };
+const FINGERS = {
+  '`':0,1:0,2:1,3:2,4:3,5:3,6:6,7:6,8:7,9:8,0:9,'-':9,'=':9,'Del':9,
+  'Q':0,'W':1,'E':2,'R':3,'T':3,'Y':6,'U':6,'I':7,'O':8,'P':9,'[':9,']':9,'\\':9,
+  'A':0,'S':1,'D':2,'F':3,'G':3,'H':6,'J':6,'K':7,'L':8,';':9,"'":9,'Enter':9,
+  'Z':0,'X':1,'C':2,'V':3,'B':3,'N':6,'M':6,',':7,'.':8,'/':9,'Shift':0,'Shift2':9,
+  'SPACE':5
+};
+const FINGER_LABELS = ['L pinky','L ring','L middle','L index','L index','—','R index','R index','R middle','R ring','R pinky'];
+
+let text = '', pos = 0, errors = 0, total = 0, keyEls = {};
+
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  keyEls = {};
+  ROWS.forEach(row => {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'kb-row';
+    row.forEach(k => {
+      const el = document.createElement('div');
+      const w = WIDE[k] || 1;
+      el.className = 'key' + (w > 1 ? '' : '');
+      el.style.minWidth = Math.round(w * 36 + (w-1)*5) + 'px';
+      if (k === 'SPACE') el.style.minWidth = '280px';
+      const label = LABELS[k] !== undefined ? LABELS[k] : k;
+      el.textContent = label;
+      if (['Tab','Del','Caps','Enter','Shift','Shift2','Ctrl','Alt','Cmd','Cmd2','Alt2','Ctrl2'].includes(k)) el.classList.add('mod');
+      rowDiv.appendChild(el);
+      const canonical = LABELS[k] !== undefined ? k : k;
+      keyEls[k] = el;
+    });
+    kb.appendChild(rowDiv);
+  });
+}
+
+function charToKey(ch) {
+  if (ch === ' ') return 'SPACE';
+  const upper = ch.toUpperCase();
+  for (const k of Object.keys(keyEls)) {
+    const label = LABELS[k] !== undefined ? LABELS[k] : k;
+    if (label === upper || k === upper) return k;
+  }
+  return null;
+}
+
+function renderText() {
+  const display = document.getElementById('textDisplay');
+  display.innerHTML = '';
+  for (let i = 0; i < text.length; i++) {
+    const span = document.createElement('span');
+    span.className = 'char';
+    if (text[i] === ' ') { span.innerHTML = '&nbsp;'; span.classList.add('space-vis'); }
+    else span.textContent = text[i];
+    if (i < pos) span.classList.add('done');
+    if (i === pos) span.classList.add('current');
+    display.appendChild(span);
+  }
+}
+
+function updateStats() {
+  const prog = Math.round(pos / text.length * 100);
+  document.getElementById('progStat').textContent = prog + '%';
+  document.getElementById('errStat').textContent = errors;
+  const acc = total > 0 ? Math.round((total - errors) / total * 100) : '—';
+  document.getElementById('accStat').textContent = total > 0 ? acc + '%' : '—';
+}
+
+function highlightKey(ch) {
+  Object.values(keyEls).forEach(el => el.classList.remove('highlight'));
+  const k = charToKey(ch);
+  if (!k) { document.getElementById('hint').textContent = ''; return; }
+  if (keyEls[k]) keyEls[k].classList.add('highlight');
+  const fi = FINGERS[k];
+  const fingerLabel = fi !== undefined ? FINGER_LABELS[fi] : '';
+  const hint = document.getElementById('hint');
+  hint.textContent = ch === ' ' ? 'Space — thumb' : `"${ch.toUpperCase()}" — ${fingerLabel}`;
+}
+
+function flashKey(ch, ok) {
+  const k = charToKey(ch);
+  if (!k || !keyEls[k]) return;
+  const el = keyEls[k];
+  el.classList.remove('highlight');
+  el.classList.add(ok ? 'correct-flash' : 'wrong-flash');
+  setTimeout(() => { el.classList.remove('correct-flash','wrong-flash'); }, 200);
+}
+
+function showResult() {
+  const acc = total > 0 ? Math.round((total - errors) / total * 100) : 100;
+  const msg = errors === 0
+    ? `Perfect! ${text.length} chars, no errors.`
+    : `Done! Accuracy: ${acc}%, errors: ${errors}`;
+  document.getElementById('resultMsg').textContent = msg;
+  document.getElementById('resultBanner').style.display = 'block';
+  Object.values(keyEls).forEach(el => el.classList.remove('highlight'));
+  document.getElementById('hint').textContent = '';
+}
+
+function startTrainer() {
+  const raw = document.getElementById('textInput').value.trim();
+  if (!raw) return;
+  text = raw;
+  pos = 0; errors = 0; total = 0;
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('trainer').style.display = 'block';
+  document.getElementById('resultBanner').style.display = 'none';
+  buildKeyboard();
+  renderText();
+  updateStats();
+  highlightKey(text[0]);
+}
+
+document.getElementById('startBtn').addEventListener('click', startTrainer);
+document.getElementById('resetBtn').addEventListener('click', () => {
+  pos = 0; errors = 0; total = 0;
+  document.getElementById('resultBanner').style.display = 'none';
+  renderText();
+  updateStats();
+  highlightKey(text[0]);
+});
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('trainer').style.display === 'none') return;
+  if (document.getElementById('resultBanner').style.display !== 'none') return;
+  if (e.key === 'Backspace' || e.key.length > 1) return;
+
+  const expected = text[pos];
+  const typed = e.key;
+  total++;
+
+  if (typed === expected) {
+    flashKey(expected, true);
+    pos++;
+    renderText();
+    updateStats();
+    if (pos >= text.length) { showResult(); return; }
+    highlightKey(text[pos]);
+  } else {
+    errors++;
+    flashKey(expected, false);
+    updateStats();
+    const chars = document.querySelectorAll('.char');
+    if (chars[pos]) {
+      chars[pos].classList.add('wrong');
+      setTimeout(() => chars[pos] && chars[pos].classList.remove('wrong'), 400);
+    }
+  }
+});
+</script>
