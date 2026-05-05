@@ -1,119 +1,491 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Typing Trainer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font-sans); }
-#app { padding: 1rem 0; }
-#setup { display: flex; gap: 8px; margin-bottom: 1rem; align-items: flex-start; flex-wrap: wrap; }
-#textInput { flex: 1; min-width: 200px; padding: 8px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); font-family: var(--font-mono); font-size: 14px; background: var(--color-background-primary); color: var(--color-text-primary); resize: none; height: 60px; }
-#startBtn { padding: 8px 20px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); cursor: pointer; font-size: 14px; white-space: nowrap; }
-#startBtn:hover { background: var(--color-background-secondary); }
+  :root {
+    --bg: #f0ede8;
+    --surface: #faf8f5;
+    --surface2: #f0ede8;
+    --border: #ddd9d1;
+    --text: #1a1714;
+    --text2: #6b6560;
+    --text3: #a39e99;
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --key-bg: #ffffff;
+    --key-shadow: 0 2px 0 #c8c3bc, 0 3px 6px rgba(0,0,0,0.08);
+    --key-shadow-mod: 0 2px 0 #b8b3ac, 0 3px 6px rgba(0,0,0,0.06);
+    --radius: 10px;
+    --font-ui: 'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
 
-#trainer { display: none; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-#textDisplay { font-family: var(--font-mono); font-size: 22px; line-height: 1.8; letter-spacing: 0.05em; background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 16px 20px; margin-bottom: 1rem; min-height: 80px; }
-.char { position: relative; }
-.char.done { color: var(--color-text-success); }
-.char.wrong { color: var(--color-text-danger); background: var(--color-background-danger); border-radius: 2px; }
-.char.current { background: #378ADD33; border-radius: 2px; }
-.char.space-vis { border-bottom: 2px solid currentColor; }
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 20px 40px;
+  }
 
-#stats { display: flex; gap: 12px; margin-bottom: 1rem; font-size: 13px; color: var(--color-text-secondary); }
-.stat { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 6px 14px; }
-.stat b { color: var(--color-text-primary); font-weight: 500; }
+  .app {
+    max-width: 820px;
+    margin: 0 auto;
+  }
 
-#keyboard { user-select: none; }
-.kb-row { display: flex; gap: 5px; margin-bottom: 5px; justify-content: center; }
-.key {
-  display: flex; align-items: center; justify-content: center;
-  height: 40px; min-width: 36px; padding: 0 6px;
-  border-radius: 6px;
-  border: 0.5px solid var(--color-border-secondary);
-  background: var(--color-background-primary);
-  color: var(--color-text-primary);
-  font-size: 12px; font-weight: 500;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
-  cursor: default;
-  position: relative;
-}
-.key.w2 { min-width: 64px; }
-.key.w3 { min-width: 90px; }
-.key.w4 { min-width: 116px; }
-.key.space-key { min-width: 280px; }
-.key.mod { background: var(--color-background-secondary); font-size: 11px; }
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .header-icon {
+    width: 40px; height: 40px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 18px;
+  }
+  .header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+  .header p {
+    font-size: 13px;
+    color: var(--text2);
+    margin-top: 1px;
+  }
 
-.key.highlight {
-  background: #378ADD !important;
-  color: #fff !important;
-  border-color: #185FA5 !important;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px #378ADD55;
-  z-index: 2;
-}
-.key.highlight::after {
-  content: '';
-  position: absolute;
-  bottom: -6px; left: 50%; transform: translateX(-50%);
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: #378ADD;
-  animation: pulse 0.6s infinite alternate;
-}
-@keyframes pulse { from { opacity: 0.4; transform: translateX(-50%) scale(0.8); } to { opacity: 1; transform: translateX(-50%) scale(1.2); } }
+  /* ── Lesson selector panel ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+  .panel-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 10px;
+  }
+  .lesson-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  select#lessonSelect {
+    flex: 1;
+    min-width: 200px;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--key-bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+  select#lessonSelect:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.key.correct-flash { background: var(--color-background-success) !important; border-color: var(--color-border-success) !important; color: var(--color-text-success) !important; transition: none; }
-.key.wrong-flash { background: var(--color-background-danger) !important; border-color: var(--color-border-danger) !important; color: var(--color-text-danger) !important; transition: none; }
+  .btn {
+    height: 40px;
+    padding: 0 20px;
+    border-radius: 8px;
+    border: none;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .btn-ghost:hover { background: var(--surface2); }
 
-#hint { text-align: center; font-size: 13px; color: var(--color-text-secondary); min-height: 20px; margin-bottom: 8px; }
+  /* custom text input */
+  .custom-row {
+    margin-top: 12px;
+    display: none;
+  }
+  .custom-row.visible { display: block; }
+  textarea#customText {
+    width: 100%;
+    height: 90px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--key-bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    resize: vertical;
+  }
+  textarea#customText:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .custom-hint { font-size: 12px; color: var(--text3); margin-top: 6px; }
 
-#resultBanner { display: none; background: var(--color-background-success); border-radius: var(--border-radius-lg); padding: 16px 20px; margin-bottom: 1rem; text-align: center; }
-#resultBanner p { color: var(--color-text-success); font-size: 15px; }
-#resetBtn { margin-top: 10px; padding: 7px 18px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-success); background: transparent; color: var(--color-text-success); cursor: pointer; font-size: 13px; }
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .stat-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--text2);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .stat-chip b { color: var(--text); font-weight: 600; }
+  .stat-chip.good b { color: var(--success); }
+  .stat-chip.bad b { color: var(--danger); }
+
+  /* ── Text display ── */
+  .text-display {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    min-height: 80px;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    line-height: 1.9;
+    letter-spacing: 0.02em;
+    word-break: break-word;
+  }
+
+  .char { position: relative; display: inline; }
+  .char.done { color: var(--success); }
+  .char.wrong { color: var(--danger); background: var(--danger-light); border-radius: 3px; }
+  .char.current {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 3px;
+    padding: 1px 1px;
+  }
+  .char.space-char { display: inline-block; width: 0.5em; }
+  .char.space-char.current { background: var(--accent); width: 0.5em; border-radius: 2px; }
+
+  /* line break marker */
+  .line-break { display: block; height: 4px; }
+
+  /* ── Hint strip ── */
+  .hint-strip {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text2);
+    height: 22px;
+    margin-bottom: 10px;
+    font-family: var(--font-ui);
+  }
+  .hint-strip .key-name {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 7px;
+    margin-right: 4px;
+  }
+
+  /* ── Keyboard ── */
+  .keyboard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+  }
+  .kb-row {
+    display: flex;
+    gap: 5px;
+  }
+  .key {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 42px;
+    min-width: 38px;
+    padding: 0 6px;
+    background: var(--key-bg);
+    border: none;
+    border-radius: 7px;
+    box-shadow: var(--key-shadow);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    transition: background 0.1s, transform 0.08s, box-shadow 0.1s;
+    user-select: none;
+    cursor: default;
+    position: relative;
+  }
+  .key.mod {
+    background: #f0ede8;
+    font-size: 11px;
+    color: var(--text2);
+    box-shadow: var(--key-shadow-mod);
+  }
+
+  .key.highlight {
+    background: var(--accent) !important;
+    color: #fff !important;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 0 #1d4ed8, 0 6px 12px rgba(37,99,235,0.35) !important;
+    z-index: 2;
+  }
+  .key.highlight::after {
+    content: '';
+    position: absolute;
+    bottom: -9px; left: 50%; transform: translateX(-50%);
+    width: 5px; height: 5px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: dot-pulse 0.7s infinite alternate;
+  }
+  @keyframes dot-pulse {
+    from { opacity: 0.3; transform: translateX(-50%) scale(0.7); }
+    to { opacity: 1; transform: translateX(-50%) scale(1.3); }
+  }
+
+  .key.flash-ok {
+    background: var(--success) !important;
+    color: #fff !important;
+    box-shadow: 0 2px 0 #15803d !important;
+    transition: none;
+  }
+  .key.flash-err {
+    background: var(--danger) !important;
+    color: #fff !important;
+    box-shadow: 0 2px 0 #b91c1c !important;
+    transition: none;
+  }
+
+  /* ── Result banner ── */
+  .result-banner {
+    display: none;
+    background: var(--success-light);
+    border: 1px solid #86efac;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .result-banner p { color: var(--success); font-size: 15px; font-weight: 500; }
+  .result-banner .result-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.2s;
+    width: 0%;
+  }
+
+  /* ── Trainer hidden until started ── */
+  #trainerSection { display: none; }
 </style>
+</head>
+<body>
+<div class="app">
 
-<div id="app">
-  <h2 class="sr-only">Typing trainer with keyboard hints</h2>
-  <div id="setup">
-    <textarea id="textInput" placeholder="Enter text to practice&#10;e.g.: fjf jfj ffjj jjff">fjf jfj ffjj jjff fjjf jffj ff jj fj jf</textarea>
-    <button id="startBtn">Start ▶</button>
+  <div class="header">
+    <div class="header-icon">⌨</div>
+    <div>
+      <h1>Typing Trainer</h1>
+      <p>Choose a lesson or enter custom text</p>
+    </div>
   </div>
 
-  <div id="trainer">
-    <div id="stats">
-      <div class="stat">Progress: <b id="progStat">0%</b></div>
-      <div class="stat">Errors: <b id="errStat">0</b></div>
-      <div class="stat">Accuracy: <b id="accStat">—</b></div>
+  <!-- ─────────────────────────────────────────────────────────────
+       LESSONS — add / edit lessons here
+       Format: { name: "Display name", lines: ["line 1", "line 2", ...] }
+       Each element in "lines" becomes a separate row in the exercise.
+       ───────────────────────────────────────────────────────────── -->
+  <script>
+  const LESSONS = [
+    {
+      name: "Lesson 1 — Common words: why who school friend house",
+      lines: [
+        "why why why why why",
+        "who who who who who",
+        "school school school school",
+        "friend friend friend friend",
+        "house house house house"
+      ]
+    },
+    {
+      name: "Lesson 2 — Home row: f j basics",
+      lines: [
+        "fjf jfj ffjj jjff",
+        "fjjf jffj ff jj fj jf",
+        "jjf jf fjf fjff jfjf fjj jff"
+      ]
+    },
+    {
+      name: "Lesson 3 — Simple words",
+      lines: [
+        "cat dog ant bat rat",
+        "hat fan pan man can",
+        "big dig fig wig jig"
+      ]
+    },
+    // ──────────────────────────────────────────────────
+    // Add more lessons here following the same format:
+    //
+    // {
+    //   name: "Lesson 4 — Your lesson name",
+    //   lines: [
+    //     "first line of text",
+    //     "second line of text",
+    //     "third line of text"
+    //   ]
+    // },
+    // ──────────────────────────────────────────────────
+    {
+      name: "[ Custom text… ]",
+      lines: []
+    }
+  ];
+  </script>
+
+  <!-- Lesson selector -->
+  <div class="panel">
+    <div class="panel-label">Select lesson</div>
+    <div class="lesson-row">
+      <select id="lessonSelect"></select>
+      <button class="btn btn-primary" id="startBtn">Start ▶</button>
     </div>
-    <div id="textDisplay"></div>
-    <div id="hint"></div>
-    <div id="keyboard"></div>
-    <div id="resultBanner">
+    <div class="custom-row" id="customRow">
+      <textarea id="customText" placeholder="Enter your text here.&#10;Each new line will appear as a separate row.&#10;&#10;Example:&#10;why why why why&#10;who who who who"></textarea>
+      <div class="custom-hint">Each line = a separate row in the exercise. Lines are joined one after another.</div>
+    </div>
+  </div>
+
+  <!-- Trainer -->
+  <div id="trainerSection">
+    <div class="stats-bar">
+      <div class="stat-chip">Progress <b id="sProg">0%</b></div>
+      <div class="stat-chip" id="sErrChip">Errors <b id="sErr">0</b></div>
+      <div class="stat-chip" id="sAccChip">Accuracy <b id="sAcc">—</b></div>
+    </div>
+
+    <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="text-display" id="textDisplay"></div>
+
+    <div class="hint-strip" id="hintStrip"></div>
+
+    <div class="result-banner" id="resultBanner">
       <p id="resultMsg"></p>
-      <button id="resetBtn">Try again ↺</button>
+      <div class="result-actions">
+        <button class="btn btn-primary" id="retryBtn">Try again ↺</button>
+        <button class="btn btn-ghost" id="backBtn">← Choose lesson</button>
+      </div>
     </div>
+
+    <div class="keyboard" id="keyboard"></div>
   </div>
+
 </div>
 
 <script>
+// ─── Keyboard layout ───────────────────────────────────────────────────────
 const ROWS = [
   ['`','1','2','3','4','5','6','7','8','9','0','-','=','Del'],
   ['Tab','Q','W','E','R','T','Y','U','I','O','P','[',']','\\'],
   ['Caps','A','S','D','F','G','H','J','K','L',';',"'",'Enter'],
-  ['Shift','Z','X','C','V','B','N','M',',','.','/',  'Shift2'],
-  ['Ctrl','Alt','Cmd','SPACE','Cmd2','Alt2','Ctrl2']
+  ['Shift','Z','X','C','V','B','N','M',',','.','/', 'Shift_R'],
+  ['Ctrl','Alt','Cmd','SPACE','Cmd_R','Alt_R','Ctrl_R']
 ];
-const WIDE = { 'Del':2, 'Tab':1.7, '\\':1.7, 'Caps':2.2, 'Enter':2.5, 'Shift':2.8, 'Shift2':2.8, 'Ctrl':1.4,'Alt':1.2,'Cmd':1.4,'Cmd2':1.4,'Alt2':1.2,'Ctrl2':1.4, 'SPACE': 7.8 };
-const LABELS = { 'SPACE':'', 'Shift2':'Shift', 'Cmd2':'Cmd', 'Alt2':'Alt', 'Ctrl2':'Ctrl' };
-const FINGERS = {
-  '`':0,1:0,2:1,3:2,4:3,5:3,6:6,7:6,8:7,9:8,0:9,'-':9,'=':9,'Del':9,
+const KEY_WIDTHS = {
+  'Del':62, 'Tab':56, '\\':56, 'Caps':68, 'Enter':74,
+  'Shift':88, 'Shift_R':88,
+  'Ctrl':48,'Alt':44,'Cmd':50,'Cmd_R':50,'Alt_R':44,'Ctrl_R':48,
+  'SPACE':290
+};
+const KEY_LABELS = {
+  'Shift_R':'Shift','Cmd_R':'Cmd','Alt_R':'Alt','Ctrl_R':'Ctrl','SPACE':''
+};
+const FINGER_MAP = {
+  '`':0,'1':0,'2':1,'3':2,'4':3,'5':3,'6':6,'7':6,'8':7,'9':8,'0':9,'-':9,'=':9,'Del':9,
   'Q':0,'W':1,'E':2,'R':3,'T':3,'Y':6,'U':6,'I':7,'O':8,'P':9,'[':9,']':9,'\\':9,
   'A':0,'S':1,'D':2,'F':3,'G':3,'H':6,'J':6,'K':7,'L':8,';':9,"'":9,'Enter':9,
-  'Z':0,'X':1,'C':2,'V':3,'B':3,'N':6,'M':6,',':7,'.':8,'/':9,'Shift':0,'Shift2':9,
-  'SPACE':5
+  'Z':0,'X':1,'C':2,'V':3,'B':3,'N':6,'M':6,',':7,'.':8,'/':9,
+  'Shift':0,'Shift_R':9,'SPACE':5
 };
-const FINGER_LABELS = ['L pinky','L ring','L middle','L index','L index','—','R index','R index','R middle','R ring','R pinky'];
+const FINGER_LABELS = ['L pinky','L ring','L middle','L index','L index','Thumb','R index','R index','R middle','R ring','R pinky'];
 
-let text = '', pos = 0, errors = 0, total = 0, keyEls = {};
+// ─── State ──────────────────────────────────────────────────────────────────
+let fullText = '';
+let pos = 0, errors = 0, total = 0;
+let keyEls = {};
 
+// ─── Populate lesson select ─────────────────────────────────────────────────
+const sel = document.getElementById('lessonSelect');
+LESSONS.forEach((l, i) => {
+  const opt = document.createElement('option');
+  opt.value = i;
+  opt.textContent = l.name;
+  sel.appendChild(opt);
+});
+sel.addEventListener('change', () => {
+  const isCustom = parseInt(sel.value) === LESSONS.length - 1;
+  document.getElementById('customRow').classList.toggle('visible', isCustom);
+});
+
+// ─── Build keyboard ──────────────────────────────────────────────────────────
 function buildKeyboard() {
   const kb = document.getElementById('keyboard');
   kb.innerHTML = '';
@@ -123,132 +495,204 @@ function buildKeyboard() {
     rowDiv.className = 'kb-row';
     row.forEach(k => {
       const el = document.createElement('div');
-      const w = WIDE[k] || 1;
-      el.className = 'key' + (w > 1 ? '' : '');
-      el.style.minWidth = Math.round(w * 36 + (w-1)*5) + 'px';
-      if (k === 'SPACE') el.style.minWidth = '280px';
-      const label = LABELS[k] !== undefined ? LABELS[k] : k;
-      el.textContent = label;
-      if (['Tab','Del','Caps','Enter','Shift','Shift2','Ctrl','Alt','Cmd','Cmd2','Alt2','Ctrl2'].includes(k)) el.classList.add('mod');
+      el.className = 'key' + (['Tab','Del','Caps','Enter','Shift','Shift_R','Ctrl','Ctrl_R','Alt','Alt_R','Cmd','Cmd_R'].includes(k) ? ' mod' : '');
+      const w = KEY_WIDTHS[k];
+      if (w) el.style.minWidth = w + 'px';
+      el.textContent = KEY_LABELS[k] !== undefined ? KEY_LABELS[k] : k;
       rowDiv.appendChild(el);
-      const canonical = LABELS[k] !== undefined ? k : k;
       keyEls[k] = el;
     });
     kb.appendChild(rowDiv);
   });
 }
 
+// ─── Map character → key id ──────────────────────────────────────────────────
 function charToKey(ch) {
   if (ch === ' ') return 'SPACE';
-  const upper = ch.toUpperCase();
+  const up = ch.toUpperCase();
   for (const k of Object.keys(keyEls)) {
-    const label = LABELS[k] !== undefined ? LABELS[k] : k;
-    if (label === upper || k === upper) return k;
+    const label = KEY_LABELS[k] !== undefined ? KEY_LABELS[k] : k;
+    if (label === up) return k;
   }
   return null;
 }
 
+// ─── Render text ─────────────────────────────────────────────────────────────
 function renderText() {
   const display = document.getElementById('textDisplay');
   display.innerHTML = '';
-  for (let i = 0; i < text.length; i++) {
+  let i = 0;
+  while (i < fullText.length) {
+    if (fullText[i] === '\n') {
+      display.appendChild(document.createElement('br'));
+      i++;
+      continue;
+    }
     const span = document.createElement('span');
     span.className = 'char';
-    if (text[i] === ' ') { span.innerHTML = '&nbsp;'; span.classList.add('space-vis'); }
-    else span.textContent = text[i];
+    if (fullText[i] === ' ') {
+      span.innerHTML = '&nbsp;';
+      span.classList.add('space-char');
+    } else {
+      span.textContent = fullText[i];
+    }
     if (i < pos) span.classList.add('done');
-    if (i === pos) span.classList.add('current');
+    else if (i === pos) span.classList.add('current');
     display.appendChild(span);
+    i++;
+  }
+  // scroll current into view
+  const cur = display.querySelector('.current');
+  if (cur) cur.scrollIntoView({ block: 'nearest' });
+}
+
+// ─── Update stats ────────────────────────────────────────────────────────────
+function updateStats() {
+  const printable = fullText.split('').filter(c => c !== '\n').length;
+  const prog = printable > 0 ? Math.round(pos / printable * 100) : 0;
+  document.getElementById('sProg').textContent = prog + '%';
+  document.getElementById('progressFill').style.width = prog + '%';
+  document.getElementById('sErr').textContent = errors;
+  document.getElementById('sErrChip').className = 'stat-chip' + (errors > 0 ? ' bad' : '');
+  if (total > 0) {
+    const acc = Math.round((total - errors) / total * 100);
+    document.getElementById('sAcc').textContent = acc + '%';
+    document.getElementById('sAccChip').className = 'stat-chip' + (acc >= 90 ? ' good' : acc < 70 ? ' bad' : '');
   }
 }
 
-function updateStats() {
-  const prog = Math.round(pos / text.length * 100);
-  document.getElementById('progStat').textContent = prog + '%';
-  document.getElementById('errStat').textContent = errors;
-  const acc = total > 0 ? Math.round((total - errors) / total * 100) : '—';
-  document.getElementById('accStat').textContent = total > 0 ? acc + '%' : '—';
-}
-
+// ─── Highlight key ────────────────────────────────────────────────────────────
 function highlightKey(ch) {
   Object.values(keyEls).forEach(el => el.classList.remove('highlight'));
   const k = charToKey(ch);
-  if (!k) { document.getElementById('hint').textContent = ''; return; }
+  if (!k) { document.getElementById('hintStrip').innerHTML = ''; return; }
   if (keyEls[k]) keyEls[k].classList.add('highlight');
-  const fi = FINGERS[k];
-  const fingerLabel = fi !== undefined ? FINGER_LABELS[fi] : '';
-  const hint = document.getElementById('hint');
-  hint.textContent = ch === ' ' ? 'Space — thumb' : `"${ch.toUpperCase()}" — ${fingerLabel}`;
+  const fi = FINGER_MAP[k];
+  const finger = fi !== undefined ? FINGER_LABELS[fi] : '';
+  const hint = document.getElementById('hintStrip');
+  if (ch === ' ') {
+    hint.innerHTML = '<span class="key-name">Space</span> — Thumb';
+  } else {
+    hint.innerHTML = `<span class="key-name">${ch.toUpperCase()}</span> — ${finger}`;
+  }
 }
 
+// ─── Flash key ────────────────────────────────────────────────────────────────
 function flashKey(ch, ok) {
   const k = charToKey(ch);
   if (!k || !keyEls[k]) return;
   const el = keyEls[k];
   el.classList.remove('highlight');
-  el.classList.add(ok ? 'correct-flash' : 'wrong-flash');
-  setTimeout(() => { el.classList.remove('correct-flash','wrong-flash'); }, 200);
+  el.classList.add(ok ? 'flash-ok' : 'flash-err');
+  setTimeout(() => el.classList.remove('flash-ok','flash-err'), 180);
 }
 
-function showResult() {
-  const acc = total > 0 ? Math.round((total - errors) / total * 100) : 100;
-  const msg = errors === 0
-    ? `Perfect! ${text.length} chars, no errors.`
-    : `Done! Accuracy: ${acc}%, errors: ${errors}`;
-  document.getElementById('resultMsg').textContent = msg;
-  document.getElementById('resultBanner').style.display = 'block';
-  Object.values(keyEls).forEach(el => el.classList.remove('highlight'));
-  document.getElementById('hint').textContent = '';
-}
-
+// ─── Start trainer ────────────────────────────────────────────────────────────
 function startTrainer() {
-  const raw = document.getElementById('textInput').value.trim();
-  if (!raw) return;
-  text = raw;
+  const idx = parseInt(sel.value);
+  const isCustom = idx === LESSONS.length - 1;
+  let lines;
+  if (isCustom) {
+    const raw = document.getElementById('customText').value.trim();
+    if (!raw) return;
+    lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  } else {
+    lines = LESSONS[idx].lines;
+  }
+  if (!lines || lines.length === 0) return;
+
+  // Join lines with newline (newlines are skipped during typing, only shown as visual breaks)
+  fullText = lines.join('\n');
+  // Remove actual \n from the typing target — newlines are visual only
+  // We'll skip \n characters automatically during key handling
   pos = 0; errors = 0; total = 0;
-  document.getElementById('setup').style.display = 'none';
-  document.getElementById('trainer').style.display = 'block';
+
+  document.getElementById('trainerSection').style.display = 'block';
   document.getElementById('resultBanner').style.display = 'none';
   buildKeyboard();
   renderText();
   updateStats();
-  highlightKey(text[0]);
+  // find first non-newline
+  advancePastNewlines();
+  highlightKey(fullText[pos]);
 }
 
-document.getElementById('startBtn').addEventListener('click', startTrainer);
-document.getElementById('resetBtn').addEventListener('click', () => {
-  pos = 0; errors = 0; total = 0;
-  document.getElementById('resultBanner').style.display = 'none';
-  renderText();
-  updateStats();
-  highlightKey(text[0]);
-});
+function advancePastNewlines() {
+  while (pos < fullText.length && fullText[pos] === '\n') pos++;
+}
 
+// ─── Show result ──────────────────────────────────────────────────────────────
+function showResult() {
+  Object.values(keyEls).forEach(el => el.classList.remove('highlight'));
+  document.getElementById('hintStrip').innerHTML = '';
+  const acc = total > 0 ? Math.round((total - errors) / total * 100) : 100;
+  const printable = fullText.split('').filter(c => c !== '\n').length;
+  let msg;
+  if (errors === 0) {
+    msg = `🎉 Perfect! ${printable} characters, zero errors!`;
+  } else if (acc >= 90) {
+    msg = `✓ Good job! Accuracy: ${acc}% — ${errors} error${errors > 1 ? 's' : ''}`;
+  } else {
+    msg = `Done. Accuracy: ${acc}% — try again to improve!`;
+  }
+  document.getElementById('resultMsg').textContent = msg;
+  document.getElementById('resultBanner').style.display = 'block';
+}
+
+// ─── Keydown handler ──────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
-  if (document.getElementById('trainer').style.display === 'none') return;
+  if (document.getElementById('trainerSection').style.display === 'none') return;
   if (document.getElementById('resultBanner').style.display !== 'none') return;
+  if (document.activeElement === document.getElementById('customText')) return;
   if (e.key === 'Backspace' || e.key.length > 1) return;
+  if (e.ctrlKey || e.metaKey) return;
 
-  const expected = text[pos];
+  const expected = fullText[pos];
   const typed = e.key;
   total++;
 
   if (typed === expected) {
     flashKey(expected, true);
     pos++;
+    advancePastNewlines();
     renderText();
     updateStats();
-    if (pos >= text.length) { showResult(); return; }
-    highlightKey(text[pos]);
+    if (pos >= fullText.length) { showResult(); return; }
+    highlightKey(fullText[pos]);
   } else {
     errors++;
     flashKey(expected, false);
     updateStats();
+    // shake current char
     const chars = document.querySelectorAll('.char');
-    if (chars[pos]) {
-      chars[pos].classList.add('wrong');
-      setTimeout(() => chars[pos] && chars[pos].classList.remove('wrong'), 400);
+    let vi = 0;
+    for (let i = 0; i < fullText.length; i++) {
+      if (fullText[i] === '\n') continue;
+      if (i === pos) { chars[vi].classList.add('wrong'); setTimeout(() => { if(chars[vi]) chars[vi].classList.remove('wrong'); }, 350); break; }
+      vi++;
     }
   }
 });
+
+// ─── Buttons ──────────────────────────────────────────────────────────────────
+document.getElementById('startBtn').addEventListener('click', () => {
+  // blur any focused input so keyboard events work
+  document.activeElement?.blur();
+  startTrainer();
+});
+
+document.getElementById('retryBtn').addEventListener('click', () => {
+  pos = 0; errors = 0; total = 0;
+  document.getElementById('resultBanner').style.display = 'none';
+  renderText();
+  updateStats();
+  advancePastNewlines();
+  highlightKey(fullText[pos]);
+});
+
+document.getElementById('backBtn').addEventListener('click', () => {
+  document.getElementById('trainerSection').style.display = 'none';
+});
 </script>
+</body>
+</html>
