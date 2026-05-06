@@ -335,6 +335,53 @@
 
   /* ── Trainer hidden until started ── */
   #trainerSection { display: none; }
+
+  /* ── Settings ── */
+  .settings-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .setting-item { display: flex; align-items: center; gap: 10px; }
+  .toggle {
+    position: relative;
+    display: inline-block;
+    width: 36px; height: 20px;
+    flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--border);
+    border-radius: 20px;
+    transition: background 0.2s;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent); }
+  .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+  .setting-label { font-size: 13px; color: var(--text2); flex: 1; }
+  .name-input {
+    height: 30px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--key-bg); color: var(--text);
+    font-family: var(--font-ui); font-size: 13px;
+    width: 160px; display: none;
+  }
+  .name-input.visible { display: block; }
+  .name-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 </head>
 <body>
@@ -411,6 +458,27 @@
       <textarea id="customText" placeholder="Enter your text here.&#10;Each new line will appear as a separate row.&#10;&#10;Example:&#10;why why why why&#10;who who who who"></textarea>
       <div class="custom-hint">Each line = a separate row in the exercise. Lines are joined one after another.</div>
     </div>
+
+    <div class="settings-section">
+      <div class="panel-label" style="margin-bottom:2px">Options</div>
+      <div class="setting-item">
+        <label class="toggle"><input type="checkbox" id="settingName"><span class="toggle-slider"></span></label>
+        <span class="setting-label">Player name</span>
+        <input type="text" id="playerName" class="name-input" placeholder="Enter name…" maxlength="30">
+      </div>
+      <div class="setting-item">
+        <label class="toggle"><input type="checkbox" id="settingHide"><span class="toggle-slider"></span></label>
+        <span class="setting-label">Hide upcoming characters</span>
+      </div>
+      <div class="setting-item">
+        <label class="toggle"><input type="checkbox" id="settingLetters"><span class="toggle-slider"></span></label>
+        <span class="setting-label">Speak letter sounds (phonetic)</span>
+      </div>
+      <div class="setting-item">
+        <label class="toggle"><input type="checkbox" id="settingWords"><span class="toggle-slider"></span></label>
+        <span class="setting-label">Speak completed words</span>
+      </div>
+    </div>
   </div>
 
   <!-- Trainer -->
@@ -472,6 +540,61 @@ let fullText = '';
 let pos = 0, errors = 0, total = 0;
 let keyEls = {};
 
+// ─── Settings ───────────────────────────────────────────────────────────────
+const cfg = {
+  get hide()       { return document.getElementById('settingHide').checked; },
+  get letters()    { return document.getElementById('settingLetters').checked; },
+  get words()      { return document.getElementById('settingWords').checked; },
+  get playerName() { return document.getElementById('playerName').value.trim(); }
+};
+
+const PHONETICS = {
+  a:'ah', b:'buh', c:'kuh', d:'duh', e:'eh', f:'fuh', g:'guh', h:'huh',
+  i:'ih', j:'juh', k:'kuh', l:'luh', m:'muh', n:'nuh', o:'oh', p:'puh',
+  q:'kwuh', r:'ruh', s:'suh', t:'tuh', u:'uh', v:'vuh', w:'wuh',
+  x:'ksuh', y:'yuh', z:'zuh'
+};
+
+// ─── Audio / speech ──────────────────────────────────────────────────────────
+let _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return _audioCtx;
+}
+function playErrorBeep() {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'square'; osc.frequency.value = 130;
+    gain.gain.setValueAtTime(0.28, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    osc.start(); osc.stop(ctx.currentTime + 0.18);
+  } catch(e) {}
+}
+function speak(text, rate) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'en-US';
+  if (rate !== undefined) utt.rate = rate;
+  window.speechSynthesis.speak(utt);
+}
+function speakPhonetic(ch) {
+  const s = PHONETICS[ch.toLowerCase()];
+  if (s) speak(s, 1.1);
+}
+function speakWord(spacePos) {
+  let i = spacePos - 1;
+  while (i > 0 && fullText[i - 1] !== ' ' && fullText[i - 1] !== '\n') i--;
+  const word = fullText.substring(i, spacePos);
+  if (word) speak(word, 0.9);
+}
+function speakEndMessage() {
+  const name = cfg.playerName;
+  speak(name ? `Well done! Great work, ${name}!` : 'Well done! Great work!', 0.95);
+}
+
 // ─── Populate lesson select ─────────────────────────────────────────────────
 const sel = document.getElementById('lessonSelect');
 LESSONS.forEach((l, i) => {
@@ -521,13 +644,15 @@ function charToKey(ch) {
 function renderText() {
   const display = document.getElementById('textDisplay');
   display.innerHTML = '';
+  const hide = cfg.hide;
   let i = 0;
   while (i < fullText.length) {
     if (fullText[i] === '\n') {
-      display.appendChild(document.createElement('br'));
+      if (!hide || i < pos) display.appendChild(document.createElement('br'));
       i++;
       continue;
     }
+    if (hide && i >= pos) { i++; continue; }
     const span = document.createElement('span');
     span.className = 'char';
     if (fullText[i] === ' ') {
@@ -541,7 +666,6 @@ function renderText() {
     display.appendChild(span);
     i++;
   }
-  // scroll current into view
   const cur = display.querySelector('.current');
   if (cur) cur.scrollIntoView({ block: 'nearest' });
 }
@@ -637,6 +761,7 @@ function showResult() {
   }
   document.getElementById('resultMsg').textContent = msg;
   document.getElementById('resultBanner').style.display = 'block';
+  if (cfg.words || cfg.letters || cfg.playerName) speakEndMessage();
 }
 
 // ─── Keydown handler ──────────────────────────────────────────────────────────
@@ -652,6 +777,8 @@ document.addEventListener('keydown', e => {
   total++;
 
   if (typed === expected) {
+    if (typed === ' ' && cfg.words) speakWord(pos);
+    if (cfg.letters && /^[a-z]$/i.test(typed)) speakPhonetic(typed);
     flashKey(expected, true);
     pos++;
     advancePastNewlines();
@@ -661,6 +788,7 @@ document.addEventListener('keydown', e => {
     highlightKey(fullText[pos]);
   } else {
     errors++;
+    if (cfg.letters) playErrorBeep();
     flashKey(expected, false);
     updateStats();
     // shake current char
@@ -692,6 +820,10 @@ document.getElementById('retryBtn').addEventListener('click', () => {
 
 document.getElementById('backBtn').addEventListener('click', () => {
   document.getElementById('trainerSection').style.display = 'none';
+});
+
+document.getElementById('settingName').addEventListener('change', function() {
+  document.getElementById('playerName').classList.toggle('visible', this.checked);
 });
 </script>
 </body>
