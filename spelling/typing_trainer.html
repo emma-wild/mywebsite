@@ -548,12 +548,23 @@ const cfg = {
   get playerName() { return document.getElementById('playerName').value.trim(); }
 };
 
-const PHONETICS = {
+// Jolly Phonics: letter → sound file name (in sounds/)
+const LETTER_SOUND = {
+  a:'a',  b:'b',  c:'ck', d:'d',  e:'e',  f:'f',  g:'g',
+  h:'h',  i:'i',  j:'j',  k:'ck', l:'l',  m:'m',  n:'n',
+  o:'o',  p:'p',  q:'qu', r:'r',  s:'s',  t:'t',  u:'u',
+  v:'v',  w:'w',  x:'x',  y:'y',  z:'z'
+};
+
+// TTS fallback (used when sounds/ files are not yet available)
+const PHONETICS_TTS = {
   a:'ah', b:'buh', c:'kuh', d:'duh', e:'eh', f:'fuh', g:'guh', h:'huh',
   i:'ih', j:'juh', k:'kuh', l:'luh', m:'muh', n:'nuh', o:'oh', p:'puh',
   q:'kwuh', r:'ruh', s:'suh', t:'tuh', u:'uh', v:'vuh', w:'wuh',
   x:'ksuh', y:'yuh', z:'zuh'
 };
+
+const _soundCache = {};
 
 // ─── Audio / speech ──────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -581,14 +592,32 @@ function speak(text, rate) {
   window.speechSynthesis.speak(utt);
 }
 function speakPhonetic(ch) {
-  const s = PHONETICS[ch.toLowerCase()];
-  if (s) speak(s, 1.1);
+  const key = ch.toLowerCase();
+  const fileName = LETTER_SOUND[key];
+  if (!fileName) return;
+  if (!_soundCache[fileName]) {
+    _soundCache[fileName] = new Audio(`sounds/${fileName}.mp3`);
+  }
+  const audio = _soundCache[fileName];
+  audio.currentTime = 0;
+  audio.play().catch(() => {
+    // sounds/ folder not ready yet — fall back to TTS
+    const s = PHONETICS_TTS[key];
+    if (s) speak(s, 1.1);
+  });
 }
 function speakWord(spacePos) {
   let i = spacePos - 1;
   while (i > 0 && fullText[i - 1] !== ' ' && fullText[i - 1] !== '\n') i--;
-  const word = fullText.substring(i, spacePos);
-  if (word) speak(word, 0.9);
+  const word = fullText.substring(i, spacePos).trim().toLowerCase();
+  if (!word) return;
+  const cacheKey = 'word/' + word;
+  if (!_soundCache[cacheKey]) {
+    _soundCache[cacheKey] = new Audio(`sounds/words/${word}.mp3`);
+  }
+  const audio = _soundCache[cacheKey];
+  audio.currentTime = 0;
+  audio.play().catch(() => speak(word, 0.9));
 }
 function speakEndMessage() {
   const name = cfg.playerName;
