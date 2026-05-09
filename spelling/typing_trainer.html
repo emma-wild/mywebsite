@@ -262,6 +262,12 @@
     user-select: none;
     cursor: default;
     position: relative;
+    touch-action: manipulation;
+  }
+  .key.typeable { cursor: pointer; }
+  .key.typeable:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 #c8c3bc, 0 2px 4px rgba(0,0,0,0.08);
   }
   .key.mod {
     background: #f0ede8;
@@ -382,6 +388,20 @@
   }
   .name-input.visible { display: block; }
   .name-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .char.combo-next {
+    background: var(--accent-light);
+    border-radius: 3px;
+    padding: 1px 1px;
+  }
+  .sound-select {
+    height: 30px; padding: 0 8px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--key-bg); color: var(--text);
+    font-family: var(--font-ui); font-size: 13px;
+    cursor: pointer;
+  }
+  .sound-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 </head>
 <body>
@@ -410,7 +430,14 @@
         "school school school school",
         "friend friend friend friend",
         "house house house house"
-      ]
+      ],
+      wordPhonemes: {
+        why:    ["w", "h", "y"],
+        who:    ["w", "h", "o"],
+        school: ["s", {text:"ch", sound:"ck"}, "oo", "l"],
+        friend: ["f", "r", {text:"ie", sound:"e"}, "n", "d"],
+        house:  ["h", "ou", "s", "e"]
+      }
     },
     {
       name: "Lesson 2 — Home row: f j basics",
@@ -426,7 +453,13 @@
         "cat dog ant bat rat",
         "hat fan pan man can",
         "big dig fig wig jig"
-      ]
+      ],
+      wordPhonemes: {
+        cat:["c","a","t"], dog:["d","o","g"], ant:["a","n","t"],
+        bat:["b","a","t"], rat:["r","a","t"], hat:["h","a","t"],
+        fan:["f","a","n"], pan:["p","a","n"], man:["m","a","n"], can:["c","a","n"],
+        big:["b","i","g"], dig:["d","i","g"], fig:["f","i","g"], wig:["w","i","g"], jig:["j","i","g"]
+      }
     },
     // ──────────────────────────────────────────────────
     // Add more lessons here following the same format:
@@ -440,6 +473,23 @@
     //   ]
     // },
     // ──────────────────────────────────────────────────
+    {
+      name: "Lesson 4 — High-frequency words: looked called asked says people",
+      lines: [
+        "looked looked looked looked",
+        "called called called called",
+        "asked asked asked asked",
+        "says says says says",
+        "people people people people"
+      ],
+      wordPhonemes: {
+        looked: ["l", {text:"oo", sound:"oo_short"}, "k", "e", "d"],
+        called: ["c", "a", {text:"ll", sound:"l"}, "e", "d"],
+        asked:  ["a", "s", "k", "e", "d"],
+        says:   ["s", {text:"ay", sound:"e"}, "s"],
+        people: ["p", {text:"eo", sound:"ee"}, "p", "l", "e"]
+      }
+    },
     {
       name: "[ Custom text… ]",
       lines: []
@@ -471,8 +521,12 @@
         <span class="setting-label">Hide upcoming characters</span>
       </div>
       <div class="setting-item">
-        <label class="toggle"><input type="checkbox" id="settingLetters"><span class="toggle-slider"></span></label>
-        <span class="setting-label">Speak letter sounds (phonetic)</span>
+        <span class="setting-label">Letter sounds</span>
+        <select id="settingSound" class="sound-select">
+          <option value="off">Off</option>
+          <option value="letters">Letters</option>
+          <option value="phonemes">Phoneme combos</option>
+        </select>
       </div>
       <div class="setting-item">
         <label class="toggle"><input type="checkbox" id="settingWords"><span class="toggle-slider"></span></label>
@@ -543,7 +597,7 @@ let keyEls = {};
 // ─── Settings ───────────────────────────────────────────────────────────────
 const cfg = {
   get hide()       { return document.getElementById('settingHide').checked; },
-  get letters()    { return document.getElementById('settingLetters').checked; },
+  get sound()      { return document.getElementById('settingSound').value; },
   get words()      { return document.getElementById('settingWords').checked; },
   get playerName() { return document.getElementById('playerName').value.trim(); }
 };
@@ -565,6 +619,73 @@ const PHONETICS_TTS = {
 };
 
 const _soundCache = {};
+
+// ─── Phoneme segmentation ────────────────────────────────────────────────────
+const DIGRAPHS = new Set(['ck','ai','oa','ie','ee','or','ng','oo','ch','sh','th','ou','oi','ue','er','ar','qu']);
+const DIGRAPH_SOUND = {
+  ck:'ck', ai:'ai', oa:'oa', ie:'ie', ee:'ee', or:'or', ng:'ng',
+  oo:'oo_long', ch:'ch', sh:'sh', th:'th', ou:'ou', oi:'oi',
+  ue:'ue', er:'er', ar:'ar', qu:'qu'
+};
+let segments = [];
+
+// wordPhonemes entry: "sh" → chars="sh", sound=DIGRAPH_SOUND["sh"]
+//                     {text:"ie", sound:"e"} → chars="ie", plays e.mp3
+function buildSegments(overrides, wordPhonemes) {
+  segments = [];
+  let i = 0;
+  while (i < fullText.length) {
+    const ch = fullText[i];
+    if (ch === '\n' || ch === ' ') {
+      segments.push({ start: i, end: i + 1, soundFile: null });
+      i++;
+      continue;
+    }
+    // Explicit word phonemes take priority over greedy detection
+    if (wordPhonemes) {
+      let wordEnd = i;
+      while (wordEnd < fullText.length && fullText[wordEnd] !== ' ' && fullText[wordEnd] !== '\n') wordEnd++;
+      const word = fullText.substring(i, wordEnd).toLowerCase();
+      const ph = wordPhonemes[word];
+      if (ph) {
+        let j = i;
+        for (const entry of ph) {
+          const text  = typeof entry === 'string' ? entry : entry.text;
+          const sound = typeof entry === 'string'
+            ? (DIGRAPH_SOUND[entry] || LETTER_SOUND[entry] || null)
+            : entry.sound;
+          segments.push({ start: j, end: j + text.length, soundFile: sound });
+          j += text.length;
+        }
+        i = wordEnd;
+        continue;
+      }
+    }
+    // Greedy fallback (also used for custom text)
+    const two = fullText.substring(i, i + 2).toLowerCase();
+    const override = overrides && overrides[two];
+    if (i + 1 < fullText.length && DIGRAPHS.has(two) && override !== false) {
+      const soundFile = typeof override === 'string' ? override : DIGRAPH_SOUND[two];
+      segments.push({ start: i, end: i + 2, soundFile });
+      i += 2;
+    } else {
+      segments.push({ start: i, end: i + 1, soundFile: LETTER_SOUND[ch.toLowerCase()] || null });
+      i++;
+    }
+  }
+}
+
+function segmentAt(p) {
+  return segments.find(s => p >= s.start && p < s.end) || null;
+}
+
+function speakFromFile(soundFile) {
+  if (!soundFile) return;
+  if (!_soundCache[soundFile]) _soundCache[soundFile] = new Audio(`sounds/${soundFile}.mp3`);
+  const a = _soundCache[soundFile];
+  a.currentTime = 0;
+  a.play().catch(() => {});
+}
 
 // ─── Audio / speech ──────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -653,6 +774,11 @@ function buildKeyboard() {
       el.textContent = KEY_LABELS[k] !== undefined ? KEY_LABELS[k] : k;
       rowDiv.appendChild(el);
       keyEls[k] = el;
+      const ch = k === 'SPACE' ? ' ' : (k.length === 1 ? k.toLowerCase() : null);
+      if (ch) {
+        el.classList.add('typeable');
+        el.addEventListener('pointerdown', (e) => { e.preventDefault(); handleTypedChar(ch); });
+      }
     });
     kb.appendChild(rowDiv);
   });
@@ -674,6 +800,7 @@ function renderText() {
   const display = document.getElementById('textDisplay');
   display.innerHTML = '';
   const hide = cfg.hide;
+  const curSeg = cfg.sound === 'phonemes' ? segmentAt(pos) : null;
   let i = 0;
   while (i < fullText.length) {
     if (fullText[i] === '\n') {
@@ -681,7 +808,8 @@ function renderText() {
       i++;
       continue;
     }
-    if (hide && i >= pos) { i++; continue; }
+    // In hide mode, skip future chars — but still show rest of current phoneme combo
+    if (hide && i >= pos && (!curSeg || i >= curSeg.end)) { i++; continue; }
     const span = document.createElement('span');
     span.className = 'char';
     if (fullText[i] === ' ') {
@@ -690,8 +818,9 @@ function renderText() {
     } else {
       span.textContent = fullText[i];
     }
-    if (i < pos) span.classList.add('done');
-    else if (i === pos) span.classList.add('current');
+    if (i < pos)             span.classList.add('done');
+    else if (i === pos)      span.classList.add('current');
+    else if (curSeg && i < curSeg.end) span.classList.add('combo-next');
     display.appendChild(span);
     i++;
   }
@@ -756,8 +885,8 @@ function startTrainer() {
 
   // Join lines with newline (newlines are skipped during typing, only shown as visual breaks)
   fullText = lines.join('\n');
-  // Remove actual \n from the typing target — newlines are visual only
-  // We'll skip \n characters automatically during key handling
+  const lesson = !isCustom ? LESSONS[idx] : {};
+  buildSegments(lesson.phonemes || {}, lesson.wordPhonemes || null);
   pos = 0; errors = 0; total = 0;
 
   document.getElementById('trainerSection').style.display = 'block';
@@ -793,21 +922,23 @@ function showResult() {
   if (cfg.words || cfg.letters || cfg.playerName) speakEndMessage();
 }
 
-// ─── Keydown handler ──────────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
+// ─── Core typing logic (called by both keyboard and virtual keys) ─────────────
+function handleTypedChar(typed) {
   if (document.getElementById('trainerSection').style.display === 'none') return;
   if (document.getElementById('resultBanner').style.display !== 'none') return;
-  if (document.activeElement === document.getElementById('customText')) return;
-  if (e.key === 'Backspace' || e.key.length > 1) return;
-  if (e.ctrlKey || e.metaKey) return;
 
   const expected = fullText[pos];
-  const typed = e.key;
   total++;
+  const soundMode = cfg.sound;
 
   if (typed === expected) {
     if (typed === ' ' && cfg.words) speakWord(pos);
-    if (cfg.letters && /^[a-z]$/i.test(typed)) speakPhonetic(typed);
+    if (soundMode === 'letters' && /^[a-z]$/i.test(typed)) {
+      speakPhonetic(typed);
+    } else if (soundMode === 'phonemes') {
+      const seg = segmentAt(pos);
+      if (seg && seg.soundFile && pos === seg.end - 1) speakFromFile(seg.soundFile);
+    }
     flashKey(expected, true);
     pos++;
     advancePastNewlines();
@@ -817,10 +948,9 @@ document.addEventListener('keydown', e => {
     highlightKey(fullText[pos]);
   } else {
     errors++;
-    if (cfg.letters) playErrorBeep();
+    if (soundMode !== 'off') playErrorBeep();
     flashKey(expected, false);
     updateStats();
-    // shake current char
     const chars = document.querySelectorAll('.char');
     let vi = 0;
     for (let i = 0; i < fullText.length; i++) {
@@ -829,6 +959,14 @@ document.addEventListener('keydown', e => {
       vi++;
     }
   }
+}
+
+// ─── Physical keyboard ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (document.activeElement === document.getElementById('customText')) return;
+  if (e.key === 'Backspace' || e.key.length > 1) return;
+  if (e.ctrlKey || e.metaKey) return;
+  handleTypedChar(e.key);
 });
 
 // ─── Buttons ──────────────────────────────────────────────────────────────────
