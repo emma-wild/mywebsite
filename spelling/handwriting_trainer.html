@@ -11,6 +11,7 @@
     --bg: #f0ede8;
     --surface: #faf8f5;
     --surface2: #f0ede8;
+    --thumb-size: 54px;
     --border: #ddd9d1;
     --text: #1a1714;
     --text2: #6b6560;
@@ -99,19 +100,47 @@
   .progress-wrap { height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 16px; overflow: hidden; }
   .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.2s; width: 0%; }
 
-  /* ── Text display ── */
-  .text-display {
+  /* ── Text display (hidden — replaced by word builder) ── */
+  #textDisplay { display: none; }
+
+  /* ── Word builder ── */
+  .word-builder {
     background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
-    padding: 20px 24px; margin-bottom: 16px; min-height: 80px;
-    font-family: var(--font-mono); font-size: 22px; line-height: 1.9;
-    letter-spacing: 0.02em; word-break: break-word;
+    padding: 14px 16px 14px 16px; margin-bottom: 16px; min-height: 68px; max-height: 300px;
+    overflow-y: auto; position: relative;
+    display: flex; flex-direction: column; gap: 10px; justify-content: flex-start;
   }
-  .char { position: relative; display: inline; }
-  .char.done { color: var(--success); }
-  .char.current { background: var(--accent); color: #fff; border-radius: 3px; padding: 1px 1px; }
-  .char.combo-next { background: var(--accent-light); border-radius: 3px; padding: 1px 1px; }
-  .char.space-char { display: inline-block; width: 0.5em; }
-  .char.space-char.current { background: var(--accent); border-radius: 2px; }
+  .word-builder-empty { color: var(--text3); font-size: 13px; }
+  .word-row { display: flex; gap: 5px; align-items: flex-end; flex-wrap: wrap; }
+  .letter-thumb { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .letter-thumb img {
+    width: var(--thumb-size); height: var(--thumb-size);
+    border-radius: 7px; border: 1.5px solid var(--border);
+    object-fit: contain; background: #fff; display: block;
+  }
+  .word-row.word-current .letter-thumb img { border-color: var(--accent); }
+  .thumb-label {
+    font-size: 11px; color: var(--text3); font-family: var(--font-mono); font-weight: 500;
+  }
+
+  /* ── Thumb size controls ── */
+  .thumb-size-controls {
+    position: absolute; top: 8px; right: 10px;
+    display: flex; align-items: center; gap: 2px;
+  }
+  .thumb-size-btn {
+    width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 5px;
+    background: var(--surface); color: var(--text2); font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    padding: 0; line-height: 1; transition: background 0.1s;
+  }
+  .thumb-size-btn:hover { background: var(--surface2); }
+  .thumb-size-val {
+    font-size: 10px; color: var(--text3); font-family: var(--font-mono);
+    min-width: 26px; text-align: center; cursor: pointer;
+    padding: 2px 2px; border-radius: 4px; line-height: 1;
+  }
+  .thumb-size-val:hover { background: var(--surface2); color: var(--text2); }
 
   /* ── Hint strip ── */
   .hint-strip {
@@ -171,6 +200,21 @@
     z-index: 2;
     touch-action: none;
     background: transparent;
+  }
+
+  @keyframes hint-pulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1);   opacity: 0.7; }
+    50%       { transform: translate(-50%, -50%) scale(1.6); opacity: 0.2; }
+  }
+  #startHint {
+    display: none;
+    position: absolute;
+    z-index: 4;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(37, 99, 235, 0.55);
+    pointer-events: none;
+    animation: hint-pulse 0.7s ease-in-out infinite;
   }
 
   .draw-controls {
@@ -374,6 +418,14 @@
 
     <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
 
+    <div id="wordBuilder" class="word-builder">
+      <div class="thumb-size-controls">
+        <button class="thumb-size-btn" id="thumbMinus" title="Smaller">−</button>
+        <span class="thumb-size-val" id="thumbSizeVal" title="Reset to default"></span>
+        <button class="thumb-size-btn" id="thumbPlus"  title="Larger">+</button>
+      </div>
+      <div id="wordBuilderContent"></div>
+    </div>
     <div class="text-display" id="textDisplay"></div>
 
     <div class="hint-strip" id="hintStrip"></div>
@@ -394,6 +446,7 @@
       <div class="canvas-wrap" id="canvasWrap">
         <img id="templateImg" class="template-overlay" src="" alt="" style="opacity:0">
         <canvas id="drawCanvas" width="320" height="320"></canvas>
+        <div id="startHint"></div>
       </div>
 
       <div class="draw-controls">
@@ -613,6 +666,24 @@ function getCanvasPos(e) {
   };
 }
 
+function showStartHint() {
+  const key = pos < fullText.length ? fullText[pos].toLowerCase() : '';
+  const sd  = typeof STROKE_DATA !== 'undefined' ? STROKE_DATA : {};
+  if (!key || !sd[key] || !sd[key][0]) return;
+  const p0   = sd[key][0].points[0];
+  const wrap = document.getElementById('canvasWrap');
+  const hint = document.getElementById('startHint');
+  const scaleX = wrap.offsetWidth  / canvas.width;
+  const scaleY = wrap.offsetHeight / canvas.height;
+  hint.style.left    = (p0.x * scaleX) + 'px';
+  hint.style.top     = (p0.y * scaleY) + 'px';
+  hint.style.display = 'block';
+}
+
+function hideStartHint() {
+  document.getElementById('startHint').style.display = 'none';
+}
+
 function clearCanvas() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
@@ -626,6 +697,7 @@ function clearCanvas() {
   strokeIdx         = 0;
   letterSegments    = 0;
   letterRedSegments = 0;
+  hideStartHint();
 }
 
 // ─── Stroke direction checking ────────────────────────────────────────────────
@@ -724,6 +796,60 @@ function recordLetterScore(ch) {
   }
 }
 
+// ─── Thumbnail size ───────────────────────────────────────────────────────────
+const THUMB_DEFAULT = 54, THUMB_MIN = 36, THUMB_MAX = 108, THUMB_STEP = 12;
+let thumbSize = parseInt(localStorage.getItem('handwriting_thumbSize') || THUMB_DEFAULT, 10);
+
+function applyThumbSize(size) {
+  thumbSize = Math.max(THUMB_MIN, Math.min(THUMB_MAX, size));
+  localStorage.setItem('handwriting_thumbSize', thumbSize);
+  document.documentElement.style.setProperty('--thumb-size', thumbSize + 'px');
+  const val = document.getElementById('thumbSizeVal');
+  if (val) val.textContent = thumbSize + 'px';
+}
+
+// ─── Word builder state ───────────────────────────────────────────────────────
+let currentWordThumbs = []; // {ch, dataUrl} for letters of word in progress
+let completedWordRows = []; // [{ch, dataUrl}][] — one array per completed word
+
+function makeWordRow(thumbs, isCurrent) {
+  const row = document.createElement('div');
+  row.className = 'word-row' + (isCurrent ? ' word-current' : '');
+  for (const {ch, dataUrl} of thumbs) {
+    const cell  = document.createElement('div');
+    cell.className = 'letter-thumb';
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = ch;
+    const label = document.createElement('span');
+    label.className = 'thumb-label';
+    label.textContent = ch;
+    cell.appendChild(img);
+    cell.appendChild(label);
+    row.appendChild(cell);
+  }
+  return row;
+}
+
+function renderWordBuilder() {
+  const content = document.getElementById('wordBuilderContent');
+  if (!content) return;
+  if (completedWordRows.length === 0 && currentWordThumbs.length === 0) {
+    content.innerHTML = '<div class="word-builder-empty">Draw each letter — your word will build up here.</div>';
+    return;
+  }
+  content.innerHTML = '';
+  for (const row of completedWordRows) {
+    content.appendChild(makeWordRow(row, false));
+  }
+  if (currentWordThumbs.length > 0) {
+    content.appendChild(makeWordRow(currentWordThumbs, true));
+  }
+  // Scroll to bottom so latest row is always visible
+  const wb = document.getElementById('wordBuilder');
+  if (wb) wb.scrollTop = wb.scrollHeight;
+}
+
 let flashingWrong = false;
 async function flashWrong() {
   if (flashingWrong) return;
@@ -735,17 +861,18 @@ async function flashWrong() {
   ctx.restore();
   await new Promise(r => setTimeout(r, 650));
   clearCanvas();
+  showStartHint(); // hint appears after clearCanvas (which calls hideStartHint first)
   flashingWrong = false;
 }
 
 canvas.addEventListener('pointerdown', e => {
   e.preventDefault();
   if (demoPlaying || flashingWrong) return;
+  hideStartHint();
   isDrawing   = true;
   const {x, y} = getCanvasPos(e);
   strokeSX = x; strokeSY = y;
-  // If start position is too far from annotation — mark wrong immediately
-  strokeDirOk = checkStartPos(x, y) ? null : false;
+  strokeDirOk = (cfg.template && !checkStartPos(x, y)) ? false : null;
   lastX = x; lastY = y;
   canvas.setPointerCapture(e.pointerId);
 });
@@ -754,7 +881,7 @@ canvas.addEventListener('pointermove', e => {
   if (!isDrawing) return;
   const {x, y} = getCanvasPos(e);
 
-  if (strokeDirOk === null) {
+  if (cfg.template && strokeDirOk === null) {
     const dx = x - strokeSX, dy = y - strokeSY;
     if (Math.sqrt(dx*dx + dy*dy) >= 25) {
       const exp = getExpectedInitialDir();
@@ -768,7 +895,7 @@ canvas.addEventListener('pointermove', e => {
     }
   }
 
-  const deviated = strokeDirOk !== false && distToAnnotationPath(x, y) > DEVIATION_TOLERANCE;
+  const deviated = cfg.template && strokeDirOk !== false && distToAnnotationPath(x, y) > DEVIATION_TOLERANCE;
   const isRed    = strokeDirOk === false || deviated;
   ctx.lineWidth   = 5;
   ctx.lineCap     = 'round';
@@ -840,7 +967,7 @@ function updateStats() {
 // ─── Letter prompt + template ─────────────────────────────────────────────────
 function updateLetterPrompt() {
   const ch = pos < fullText.length ? fullText[pos] : '';
-  document.getElementById('letterPrompt').textContent = ch ? ch.toUpperCase() : '';
+  document.getElementById('letterPrompt').textContent = ch || '';
 }
 
 function updateTemplate() {
@@ -869,14 +996,14 @@ function updateHintStrip() {
       return;
     }
   }
-  hint.innerHTML = `<span class="key-name">${ch.toUpperCase()}</span>`;
+  hint.innerHTML = '';
 }
 
 // ─── Confirm letter ───────────────────────────────────────────────────────────
 function confirmLetter() {
   if (document.getElementById('resultBanner').style.display !== 'none') return;
   if (pos >= fullText.length) return;
-  recordLetterScore(fullText[pos]);
+  if (cfg.template) recordLetterScore(fullText[pos]);
 
   const ch = fullText[pos];
   total++;
@@ -888,19 +1015,28 @@ function confirmLetter() {
     if (seg && seg.soundFile && pos === seg.end - 1) speakFromFile(seg.soundFile);
   }
 
+  // Capture drawn letter as thumbnail before clearing
+  const thumbUrl = canvas.toDataURL('image/png');
+
   pos++;
 
+  const atWordEnd = pos >= fullText.length || fullText[pos] === ' ' || fullText[pos] === '\n';
+
   // Speak word when we reach a boundary (space, newline, or end of text)
-  if (cfg.words) {
-    const atBoundary = pos >= fullText.length || fullText[pos] === ' ' || fullText[pos] === '\n';
-    if (atBoundary) speakWord(pos);
-  }
+  if (cfg.words && atWordEnd) speakWord(pos);
 
   // Auto-skip spaces and newlines
   while (pos < fullText.length && (fullText[pos] === ' ' || fullText[pos] === '\n')) pos++;
 
+  // Add thumbnail to current word; finalize if word boundary reached
+  currentWordThumbs.push({ ch, dataUrl: thumbUrl });
+  if (atWordEnd) {
+    completedWordRows.push([...currentWordThumbs]);
+    currentWordThumbs = [];
+  }
+
   clearCanvas();
-  renderText();
+  renderWordBuilder();
   updateStats();
 
   if (pos >= fullText.length) { showResult(); return; }
@@ -959,6 +1095,8 @@ function startTrainer() {
   fullText = lines.join('\n');
   recentScores.length = 0;
   allScores.length    = 0;
+  currentWordThumbs   = [];
+  completedWordRows   = [];
   document.getElementById('scoreStrip').innerHTML = '';
   document.getElementById('avgChip').style.display = 'none';
   document.getElementById('sAvg').textContent = '—';
@@ -973,7 +1111,7 @@ function startTrainer() {
   document.getElementById('resultBanner').style.display   = 'none';
 
   clearCanvas();
-  renderText();
+  renderWordBuilder();
   updateStats();
   updateLetterPrompt();
   updateTemplate();
@@ -993,10 +1131,17 @@ document.getElementById('confirmBtn').addEventListener('click', confirmLetter);
 
 document.getElementById('retryBtn').addEventListener('click', () => {
   pos = 0; total = 0;
+  currentWordThumbs = [];
+  completedWordRows = [];
+  recentScores.length = 0;
+  allScores.length    = 0;
+  document.getElementById('scoreStrip').innerHTML = '';
+  document.getElementById('avgChip').style.display = 'none';
+  document.getElementById('sAvg').textContent = '—';
   while (pos < fullText.length && (fullText[pos] === ' ' || fullText[pos] === '\n')) pos++;
   document.getElementById('resultBanner').style.display = 'none';
   clearCanvas();
-  renderText();
+  renderWordBuilder();
   updateStats();
   updateLetterPrompt();
   updateTemplate();
@@ -1012,9 +1157,24 @@ document.getElementById('settingName').addEventListener('change', function() {
   document.getElementById('playerName').classList.toggle('visible', this.checked);
 });
 
-document.getElementById('settingTemplate').addEventListener('change', updateTemplate);
+document.getElementById('settingTemplate').addEventListener('change', () => {
+  updateTemplate();
+  if (!cfg.template) {
+    document.getElementById('scoreStrip').innerHTML = '';
+    document.getElementById('avgChip').style.display = 'none';
+    recentScores.length = 0;
+    allScores.length    = 0;
+  }
+});
 
 document.getElementById('watchBtn').addEventListener('click', playStrokeDemo);
+
+// ─── Thumbnail size controls ───────────────────────────────────────────────
+document.getElementById('thumbMinus').addEventListener('click', () => applyThumbSize(thumbSize - THUMB_STEP));
+document.getElementById('thumbPlus') .addEventListener('click', () => applyThumbSize(thumbSize + THUMB_STEP));
+document.getElementById('thumbSizeVal').addEventListener('click', () => applyThumbSize(THUMB_DEFAULT));
+
+applyThumbSize(thumbSize); // apply stored / default on load
 </script>
 </body>
 </html>
