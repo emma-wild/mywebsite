@@ -50,10 +50,18 @@
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 14px; padding: 20px 24px; margin-bottom: 20px;
   }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .panel-label {
     font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--text3); margin-bottom: 10px;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 0;
   }
+  .panel-toggle {
+    background: none; border: none; cursor: pointer; color: var(--text3);
+    font-size: 13px; padding: 2px 6px; border-radius: 4px; line-height: 1;
+  }
+  .panel-toggle:hover { background: var(--surface2); }
+  #settingsPanel.collapsed #panelBody { display: none; }
+  #settingsPanel.collapsed { padding-bottom: 16px; }
   .lesson-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   select#lessonSelect {
     flex: 1; min-width: 200px; height: 40px; padding: 0 12px;
@@ -250,7 +258,7 @@
     50%       { transform: translate(-50%, -50%) scale(1.6); opacity: 0.2; }
   }
   #startHint {
-    display: none; position: absolute; z-index: 4;
+    display: none; position: fixed; z-index: 9999;
     width: 26px; height: 26px; border-radius: 50%;
     background: rgba(37, 99, 235, 0.55); pointer-events: none;
     animation: hint-pulse 0.7s ease-in-out infinite;
@@ -295,6 +303,16 @@
     border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; text-align: center;
   }
   .result-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+
+  /* ── Final screen ── */
+  .final-screen {
+    display: none; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 36px 28px 28px; margin-bottom: 16px; text-align: center;
+  }
+  .final-emoji { font-size: 64px; line-height: 1; margin-bottom: 14px; }
+  .final-title { font-size: 24px; font-weight: 700; letter-spacing: -0.4px; margin-bottom: 8px; }
+  .final-msg   { font-size: 15px; color: var(--text2); margin-bottom: 20px; }
+  .final-stats { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
 </style>
 </head>
 <body>
@@ -329,40 +347,49 @@
   ];
   </script>
 
-  <div class="panel">
-    <div class="panel-label">Select lesson</div>
-    <div class="lesson-row">
-      <select id="lessonSelect"></select>
-      <button class="btn btn-primary" id="startBtn">Start ▶</button>
+  <div class="panel" id="settingsPanel">
+    <div class="panel-header">
+      <span class="panel-label">Select lesson</span>
+      <button class="panel-toggle" id="panelToggle" title="Collapse settings">▲</button>
     </div>
-    <div id="customRow" style="display:none; margin-top:12px">
-      <textarea id="customText" style="width:100%;height:70px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text);font-family:var(--font-mono);font-size:13px;resize:vertical" placeholder="One word per line…"></textarea>
-      <div style="font-size:12px;color:var(--text3);margin-top:6px">One word per line.</div>
-    </div>
-    <div class="settings-section">
-      <div class="panel-label" style="margin-bottom:2px">Options</div>
-      <div class="setting-item">
-        <label class="toggle"><input type="checkbox" id="settingGuess" checked><span class="toggle-slider"></span></label>
-        <span class="setting-label">Guess number of letters first</span>
+    <div id="panelBody">
+      <div class="lesson-row">
+        <select id="lessonSelect"></select>
+        <button class="btn btn-primary" id="startBtn">Start ▶</button>
       </div>
-      <div class="setting-item">
-        <label class="toggle"><input type="checkbox" id="settingTemplate" checked><span class="toggle-slider"></span></label>
-        <span class="setting-label">Show letter template</span>
+      <div id="customRow" style="display:none; margin-top:12px">
+        <textarea id="customText" style="width:100%;height:70px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text);font-family:var(--font-mono);font-size:13px;resize:vertical" placeholder="One word per line…"></textarea>
+        <div style="font-size:12px;color:var(--text3);margin-top:6px">One word per line.</div>
       </div>
-      <div class="setting-item">
-        <label class="toggle"><input type="checkbox" id="settingAutoAdvance"><span class="toggle-slider"></span></label>
-        <span class="setting-label">Auto-advance to next cell after drawing</span>
-      </div>
-      <div class="setting-item">
-        <label class="toggle"><input type="checkbox" id="settingPalmReject"><span class="toggle-slider"></span></label>
-        <span class="setting-label">Pen only — reject touch (Apple Pencil mode)</span>
-      </div>
-      <div class="setting-item">
-        <span class="setting-label">Letter sounds</span>
-        <select id="settingSound" class="sound-select">
-          <option value="off">Off</option>
-          <option value="letters">Letters</option>
-        </select>
+      <div class="settings-section">
+        <div class="panel-label" style="margin-bottom:2px">Options</div>
+        <div class="setting-item">
+          <label class="toggle"><input type="checkbox" id="settingGuess" checked><span class="toggle-slider"></span></label>
+          <span class="setting-label">Guess number of letters first</span>
+        </div>
+        <div class="setting-item">
+          <label class="toggle"><input type="checkbox" id="settingTemplate" checked><span class="toggle-slider"></span></label>
+          <span class="setting-label">Show letter template</span>
+        </div>
+        <div class="setting-item">
+          <label class="toggle"><input type="checkbox" id="settingAutoAdvance"><span class="toggle-slider"></span></label>
+          <span class="setting-label">Auto-advance to next cell after drawing</span>
+        </div>
+        <div class="setting-item">
+          <label class="toggle"><input type="checkbox" id="settingPalmReject"><span class="toggle-slider"></span></label>
+          <span class="setting-label">Pen only — reject touch (Apple Pencil mode)</span>
+        </div>
+        <div class="setting-item">
+          <label class="toggle"><input type="checkbox" id="settingShuffle"><span class="toggle-slider"></span></label>
+          <span class="setting-label">Shuffle word order</span>
+        </div>
+        <div class="setting-item">
+          <span class="setting-label">Letter sounds</span>
+          <select id="settingSound" class="sound-select">
+            <option value="off">Off</option>
+            <option value="letters">Letters</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>
@@ -413,7 +440,6 @@
         <div class="canvas-wrap" id="canvasWrap">
           <img id="templateImg" class="template-overlay" src="" alt="" style="opacity:0">
           <canvas id="drawCanvas" width="320" height="320"></canvas>
-          <div id="startHint"></div>
         </div>
         <div class="draw-controls">
           <button class="btn btn-ghost" id="watchBtn" style="display:none">▶ Watch</button>
@@ -424,13 +450,28 @@
       </div>
     </div>
 
-    <!-- Result banner -->
+    <!-- Result banner (per word) -->
     <div class="result-banner" id="resultBanner">
       <div id="resultScore" style="font-size:48px;line-height:1;margin-bottom:8px"></div>
       <p id="resultMsg" style="font-size:16px;color:var(--success);font-weight:500"></p>
       <div class="result-actions">
         <button class="btn btn-primary" id="nextWordBtn">Next word ▶</button>
         <button class="btn btn-ghost"   id="backBtn">← Choose lesson</button>
+      </div>
+    </div>
+
+    <!-- Final screen (lesson complete) -->
+    <div class="final-screen" id="finalScreen">
+      <div class="final-emoji" id="finalEmoji"></div>
+      <div class="final-title" id="finalTitle"></div>
+      <div class="final-msg"   id="finalMsg"></div>
+      <div class="final-stats">
+        <div class="stat-chip">Words <b id="finalWords">—</b></div>
+        <div class="stat-chip" id="finalScoreChip" style="display:none">Score <b id="finalScore">—</b></div>
+      </div>
+      <div class="result-actions">
+        <button class="btn btn-primary" id="tryAgainBtn">↺ Try again</button>
+        <button class="btn btn-ghost"   id="finalBackBtn">← Choose lesson</button>
       </div>
     </div>
 
@@ -610,7 +651,7 @@ function attachPointerListeners(c, cellIdx) {
   c.addEventListener('pointerup', () => {
     if (!isDrawing) return;
     isDrawing = false;
-    if (strokeDirOk === false) {
+    if (strokeDirOk === false && cfg.template) {
       flashWrong();
       return;
     }
@@ -873,31 +914,29 @@ function distToAnnotationPath(x, y, scale) {
 function showStartHint() {
   const strokes = getStrokeData();
   if (!strokes || strokeIdx >= strokes.length || !cfg.template) return;
-  const p0 = strokes[strokeIdx].points[0];
   const hint = document.getElementById('startHint');
+  if (!hint) return;
+  const p0 = strokes[strokeIdx].points[0];
 
+  let rect, scale;
   if (isWideMode) {
-    const cells = document.querySelectorAll('.wide-cell-inner');
-    const cellEl = cells[currentCellIdx];
-    if (!cellEl) return;
-    const size = wideCellCanvases[currentCellIdx]?.width || 320;
-    const scale = size / 320;
-    cellEl.appendChild(hint);
-    hint.style.left = (p0.x * scale) + 'px';
-    hint.style.top  = (p0.y * scale) + 'px';
+    const c = wideCellCanvases[currentCellIdx];
+    if (!c) return;
+    rect  = c.getBoundingClientRect();
+    scale = rect.width / 320; // c.width/320 * (rect.width/c.width) = rect.width/320
   } else {
-    const wrap = document.getElementById('canvasWrap');
-    wrap.appendChild(hint);
-    const scaleX = wrap.offsetWidth  / canvas.width;
-    const scaleY = wrap.offsetHeight / canvas.height;
-    hint.style.left = (p0.x * scaleX) + 'px';
-    hint.style.top  = (p0.y * scaleY) + 'px';
+    rect  = document.getElementById('canvasWrap').getBoundingClientRect();
+    scale = rect.width / canvas.width;
   }
+
+  hint.style.left    = (rect.left + p0.x * scale) + 'px';
+  hint.style.top     = (rect.top  + p0.y * scale) + 'px';
   hint.style.display = 'block';
 }
 
 function hideStartHint() {
-  document.getElementById('startHint').style.display = 'none';
+  const hint = document.getElementById('startHint');
+  if (hint) hint.style.display = 'none';
 }
 
 async function flashWrong() {
@@ -1139,12 +1178,6 @@ function finishWord() {
     `${Math.round((wordIdx + 1) / lessonWords.length * 100)}%`;
 
   const isLast = wordIdx >= lessonWords.length - 1;
-  document.getElementById('resultScore').textContent = isLast ? '🌟' : '🎉';
-  document.getElementById('resultMsg').textContent = isLast
-    ? 'All done! Amazing work!'
-    : `"${currentWord}" — great job!`;
-  document.getElementById('nextWordBtn').textContent = isLast ? 'Finish ✓' : 'Next word ▶';
-  document.getElementById('resultBanner').style.display = 'block';
   hasDrawing = false;
   const wp = document.getElementById('writePanel');
   wp.classList.remove('visible');
@@ -1152,6 +1185,48 @@ function finishWord() {
   isWideMode = false;
   wideCellCanvases = [];
   document.getElementById('guessPanel').style.display = 'none';
+
+  if (isLast) {
+    showFinalScreen();
+  } else {
+    document.getElementById('resultScore').textContent = '🎉';
+    document.getElementById('resultMsg').textContent = `"${currentWord}" — great job!`;
+    document.getElementById('nextWordBtn').textContent = 'Next word ▶';
+    document.getElementById('resultBanner').style.display = 'block';
+  }
+}
+
+// ─── Final screen ─────────────────────────────────────────────────────────────
+function showFinalScreen() {
+  const avg = lessonAvg();
+  let emoji, title, msg;
+  if (avg === null) {
+    emoji = '🎉'; title = 'Lesson complete!'; msg = 'All words done — well done!';
+  } else if (avg >= 90) {
+    emoji = '🌟'; title = 'Outstanding!';      msg = 'Perfect strokes — keep it up!';
+  } else if (avg >= 70) {
+    emoji = '😊'; title = 'Great job!';         msg = 'Really good writing today.';
+  } else if (avg >= 50) {
+    emoji = '🙂'; title = 'Good effort!';       msg = 'A little more practice and you\'ll nail it.';
+  } else {
+    emoji = '💪'; title = 'Keep practising!';   msg = 'Try again — every stroke counts.';
+  }
+
+  document.getElementById('finalEmoji').textContent  = emoji;
+  document.getElementById('finalTitle').textContent  = title;
+  document.getElementById('finalMsg').textContent    = msg;
+  document.getElementById('finalWords').textContent  = lessonWords.length;
+
+  const scoreChip = document.getElementById('finalScoreChip');
+  if (avg !== null) {
+    document.getElementById('finalScore').textContent = avg + '% ' + scoreEmoji(avg);
+    scoreChip.style.display = '';
+  } else {
+    scoreChip.style.display = 'none';
+  }
+
+  document.getElementById('finalScreen').style.display = 'block';
+  document.getElementById('progressFill').style.width = '100%';
 }
 
 // ─── Load word ────────────────────────────────────────────────────────────────
@@ -1183,6 +1258,13 @@ function startTrainer() {
   }
   if (!words.length) return;
 
+  if (document.getElementById('settingShuffle').checked) {
+    for (let i = words.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [words[i], words[j]] = [words[j], words[i]];
+    }
+  }
+
   lessonWords       = words;
   completedWordRows = [];
   recentScores.length = 0;
@@ -1193,12 +1275,14 @@ function startTrainer() {
   renderWordBuilder();
 
   document.getElementById('trainerSection').style.display = 'block';
+  document.getElementById('finalScreen').style.display = 'none';
   loadWord(0);
 }
 
 // ─── Buttons ──────────────────────────────────────────────────────────────────
 document.getElementById('startBtn').addEventListener('click', () => {
   document.activeElement?.blur();
+  applyPanelState(localStorage.getItem('spelling_panelCollapsed') === '1');
   startTrainer();
 });
 
@@ -1227,22 +1311,46 @@ document.getElementById('doneBtn').addEventListener('click', () => {
 });
 
 document.getElementById('nextWordBtn').addEventListener('click', () => {
-  if (wordIdx >= lessonWords.length - 1) {
-    document.getElementById('trainerSection').style.display = 'none';
-    return;
-  }
   loadWord(wordIdx + 1);
 });
 
 document.getElementById('backBtn').addEventListener('click', () => {
-  clearTimeout(advanceTimer);
-  advanceTimer = null;
+  clearTimeout(advanceTimer); advanceTimer = null;
   document.getElementById('trainerSection').style.display = 'none';
+  document.getElementById('settingsPanel').classList.remove('collapsed');
+  document.getElementById('panelToggle').textContent = '▲';
+});
+
+document.getElementById('tryAgainBtn').addEventListener('click', () => {
+  document.getElementById('finalScreen').style.display = 'none';
+  startTrainer();
+});
+
+document.getElementById('finalBackBtn').addEventListener('click', () => {
+  document.getElementById('finalScreen').style.display = 'none';
+  document.getElementById('trainerSection').style.display = 'none';
+  document.getElementById('settingsPanel').classList.remove('collapsed');
+  document.getElementById('panelToggle').textContent = '▲';
 });
 
 document.getElementById('settingTemplate').addEventListener('change', () => {
+  strokeDirOk = null; // discard any in-progress direction check
   if (isWideMode) updateWideCellVisuals(); else updateTemplate();
+  showStartHint();
 });
+
+// ─── Settings panel collapse ─────────────────────────────────────────────────
+function applyPanelState(collapsed) {
+  document.getElementById('settingsPanel').classList.toggle('collapsed', collapsed);
+  document.getElementById('panelToggle').textContent = collapsed ? '▼' : '▲';
+  localStorage.setItem('spelling_panelCollapsed', collapsed ? '1' : '0');
+}
+document.getElementById('panelToggle').addEventListener('click', () => {
+  applyPanelState(!document.getElementById('settingsPanel').classList.contains('collapsed'));
+});
+// start always expanded visually without overwriting the saved preference
+document.getElementById('settingsPanel').classList.remove('collapsed');
+document.getElementById('panelToggle').textContent = '▲';
 
 // ─── Thumbnail size controls ──────────────────────────────────────────────────
 const THUMB_DEFAULT = 54, THUMB_MIN = 36, THUMB_MAX = 108, THUMB_STEP = 12;
@@ -1269,5 +1377,6 @@ new ResizeObserver(() => {
   }
 }).observe(document.querySelector('.app'));
 </script>
+<div id="startHint"></div>
 </body>
 </html>
