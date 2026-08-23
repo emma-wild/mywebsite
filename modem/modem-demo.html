@@ -517,24 +517,31 @@
   let dtmfSilenceCount = 0;
 
   function processDTMF(samples, sampleRate){
-    // energy gate
+    // energy gate (silence detection) — Float32 samples in [-1,1]
     let energy = 0;
     for(let i=0;i<samples.length;i++) energy += samples[i]*samples[i];
     energy = Math.sqrt(energy/samples.length);
-    if(energy < 0.01){
+    if(energy < 0.004){
       dtmfSilenceCount++;
       if(dtmfSilenceCount > 2){ dtmfState='idle'; dtmfActiveChar=null; dtmfStableCount=0; }
       return;
     }
     dtmfSilenceCount = 0;
 
-    let bestLow = LOW_FREQS[0], bestLowMag = -1;
-    LOW_FREQS.forEach(f=>{ const m=goertzelMag(samples,sampleRate,f); if(m>bestLowMag){bestLowMag=m; bestLow=f;} });
-    let bestHigh = HIGH_FREQS[0], bestHighMag = -1;
-    HIGH_FREQS.forEach(f=>{ const m=goertzelMag(samples,sampleRate,f); if(m>bestHighMag){bestHighMag=m; bestHigh=f;} });
+    const lowMags  = LOW_FREQS.map(f=>goertzelMag(samples,sampleRate,f));
+    const highMags = HIGH_FREQS.map(f=>goertzelMag(samples,sampleRate,f));
 
-    const threshold = samples.length * 0.35;
-    if(bestLowMag < threshold || bestHighMag < threshold) return;
+    let bestLowIdx = 0, bestHighIdx = 0;
+    lowMags.forEach((m,i)=>{ if(m>lowMags[bestLowIdx]) bestLowIdx=i; });
+    highMags.forEach((m,i)=>{ if(m>highMags[bestHighIdx]) bestHighIdx=i; });
+
+    const bestLow = LOW_FREQS[bestLowIdx], bestLowMag = lowMags[bestLowIdx];
+    const bestHigh = HIGH_FREQS[bestHighIdx], bestHighMag = highMags[bestHighIdx];
+
+    // relative dominance check: best tone must clearly stand out among its own group
+    const meanLow = lowMags.reduce((a,b)=>a+b,0)/lowMags.length;
+    const meanHigh = highMags.reduce((a,b)=>a+b,0)/highMags.length;
+    if(bestLowMag < meanLow*1.8 || bestHighMag < meanHigh*1.8) return;
 
     const ch = DTMF_MAP[bestLow+','+bestHigh];
     if(!ch) return;
@@ -555,13 +562,23 @@
 
   // rough AFSK tone presence indicator (not bit-accurate decoding)
   function processAFSKIndicator(samples, sampleRate){
+    let energy = 0;
+    for(let i=0;i<samples.length;i++) energy += samples[i]*samples[i];
+    energy = Math.sqrt(energy/samples.length);
+    if(energy < 0.004){
+      ledMark.style.background = '#233021'; ledMark.style.boxShadow='none';
+      ledSpace.style.background = '#233021'; ledSpace.style.boxShadow='none';
+      return;
+    }
     const mMark = goertzelMag(samples, sampleRate, 1200);
     const mSpace = goertzelMag(samples, sampleRate, 2200);
-    const threshold = samples.length * 0.25;
-    ledMark.style.background = (mMark>threshold && mMark>mSpace) ? '#3dff6e' : '#233021';
-    ledMark.style.boxShadow = (mMark>threshold && mMark>mSpace) ? '0 0 10px #3dff6e' : 'none';
-    ledSpace.style.background = (mSpace>threshold && mSpace>=mMark) ? '#ffb000' : '#233021';
-    ledSpace.style.boxShadow = (mSpace>threshold && mSpace>=mMark) ? '0 0 10px #ffb000' : 'none';
+    const dominant = mMark > mSpace ? mMark : mSpace;
+    const other = mMark > mSpace ? mSpace : mMark;
+    const isDominant = dominant > other*1.5;
+    ledMark.style.background = (isDominant && mMark>mSpace) ? '#3dff6e' : '#233021';
+    ledMark.style.boxShadow = (isDominant && mMark>mSpace) ? '0 0 10px #3dff6e' : 'none';
+    ledSpace.style.background = (isDominant && mSpace>=mMark) ? '#ffb000' : '#233021';
+    ledSpace.style.boxShadow = (isDominant && mSpace>=mMark) ? '0 0 10px #ffb000' : 'none';
   }
 
   async function startRx(){
