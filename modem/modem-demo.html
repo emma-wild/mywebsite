@@ -577,6 +577,16 @@
     let noToneCount = 0;
 
     return function process(samples, sampleRate){
+      // guard against the "all-zero tie" case first: true digital silence
+      // (e.g. the very first buffer right after starting the mic stream)
+      // makes every Goertzel magnitude exactly 0, and 0 >= 0*1.8 is technically
+      // true — without this floor, silence itself gets misread as a
+      // permanently "present" tone and the decoder never returns to idle.
+      let rms = 0;
+      for(let i=0;i<samples.length;i++) rms += samples[i]*samples[i];
+      rms = Math.sqrt(rms/samples.length);
+      const hasSignal = rms > 0.0008; // just above true digital silence, well below any real mic noise floor
+
       const lowMags  = rowFreqs.map(f=>goertzelMag(samples,sampleRate,f));
       const highMags = colFreqs.map(f=>goertzelMag(samples,sampleRate,f));
 
@@ -589,7 +599,8 @@
 
       const meanLow = lowMags.reduce((a,b)=>a+b,0)/lowMags.length;
       const meanHigh = highMags.reduce((a,b)=>a+b,0)/highMags.length;
-      const toneDetected = (bestLowMag >= meanLow*1.8 && bestHighMag >= meanHigh*1.8);
+
+      const toneDetected = hasSignal && (bestLowMag >= meanLow*1.8 && bestHighMag >= meanHigh*1.8);
       const ch = toneDetected ? revMap[bestLow+','+bestHigh] : null;
 
       if(!ch){
