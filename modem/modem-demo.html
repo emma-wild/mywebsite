@@ -68,9 +68,9 @@
   /* Mode toggle */
   .modes{ display:flex; gap:8px; margin-bottom:0; }
   .mode-btn{
-    flex:1; padding:10px 8px; text-align:center;
+    flex:1; padding:10px 4px; text-align:center;
     background:var(--panel-2); border:1px solid var(--line); border-radius:2px;
-    font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; letter-spacing:1px;
+    font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:700; letter-spacing:0.3px;
     color:var(--text-dim); cursor:pointer; transition:all .15s ease;
   }
   .mode-btn.active{
@@ -162,11 +162,13 @@
   <div class="panel" data-label="Режим передачи">
     <div class="modes">
       <div class="mode-btn active" id="btnDTMF">DTMF</div>
+      <div class="mode-btn" id="btnDTMF36">DTMF-36</div>
       <div class="mode-btn" id="btnAFSK">AFSK 1200</div>
     </div>
 
     <textarea id="msgInput" class="mono" placeholder="Введите сообщение..." maxlength="40"></textarea>
     <div class="dtmf-hint" id="hintText">Разрешены: 0–9, *, #, A–D. Остальные символы будут пропущены.</div>
+    <div class="dtmf-hint mono" id="statsText" style="color:var(--amber); margin-top:4px;"></div>
 
     <div class="keypad" id="keypad"></div>
 
@@ -241,6 +243,7 @@
   const playBtn = document.getElementById('playBtn');
   const clearBtn = document.getElementById('clearBtn');
   const btnDTMF = document.getElementById('btnDTMF');
+  const btnDTMF36 = document.getElementById('btnDTMF36');
   const btnAFSK = document.getElementById('btnAFSK');
   const modeLabel = document.getElementById('modeLabel');
   const hintText = document.getElementById('hintText');
@@ -266,6 +269,18 @@
   };
   const keys = ['1','2','3','4','5','6','7','8','9','*','0','#'];
 
+  // Two-tone matrix code covering full A-Z + 0-9 (6x6 = 36 symbols) — same
+  // principle as DTMF (one tone from each of two disjoint groups), just a
+  // bigger alphabet. Reliably decodable with the same Goertzel approach.
+  const DTMF36_ROWS = [700,850,1000,1150,1300,1450];
+  const DTMF36_COLS = [1700,1850,2000,2150,2300,2450];
+  const DTMF36_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const DTMF36_FREQ = {}; // char -> [rowFreq, colFreq]
+  DTMF36_ALPHABET.split('').forEach((ch,i)=>{
+    const r = Math.floor(i/6), c = i%6;
+    DTMF36_FREQ[ch] = [DTMF36_ROWS[r], DTMF36_COLS[c]];
+  });
+
   function buildKeypad(){
     keypad.innerHTML = '';
     if(mode !== 'dtmf'){ keypad.style.display = 'none'; return; }
@@ -282,18 +297,43 @@
   }
   buildKeypad();
 
+  const statsText = document.getElementById('statsText');
+  const SYMBOL_PERIOD = 0.18 + 0.12; // durTone + gap, shared by DTMF and DTMF-36
+  const AFSK_BAUD = 1200;
+
+  function updateStats(m){
+    if(m === 'dtmf' || m === 'dtmf36'){
+      const alphabetSize = m === 'dtmf' ? 16 : 36;
+      const baud = 1/SYMBOL_PERIOD;
+      const bitsPerSymbol = Math.log2(alphabetSize);
+      const bps = baud * bitsPerSymbol;
+      statsText.textContent =
+        `${baud.toFixed(2)} Бод · алфавит ${alphabetSize} симв. → log₂(${alphabetSize})=${bitsPerSymbol.toFixed(2)} бит/символ · эффективно ≈ ${bps.toFixed(1)} бит/с`;
+    } else {
+      statsText.textContent =
+        `${AFSK_BAUD} Бод · бинарная FSK (1 бит/символ) · = ${AFSK_BAUD} бит/с — здесь Бод и бит/с совпадают`;
+    }
+  }
+
+  updateStats(mode);
+
   function setMode(m){
     mode = m;
     btnDTMF.classList.toggle('active', m==='dtmf');
+    btnDTMF36.classList.toggle('active', m==='dtmf36');
     btnAFSK.classList.toggle('active', m==='afsk');
-    modeLabel.textContent = m==='dtmf' ? 'DTMF' : 'AFSK 1200';
+    modeLabel.textContent = m==='dtmf' ? 'DTMF' : (m==='dtmf36' ? 'DTMF-36' : 'AFSK 1200');
     hintText.textContent = m==='dtmf'
       ? 'Разрешены: 0–9, *, #, A–D. Остальные символы будут пропущены.'
-      : 'Любой текст латиницей/цифрами. Кодируется тонами 1200/2200 Гц (Bell 202).';
+      : m==='dtmf36'
+      ? 'Покрывает весь латинский алфавит A–Z и цифры 0–9 (36 символов, матрица 6×6). Каждый символ — своя пара тонов, надёжно декодируется обратно в текст.'
+      : 'Любой текст латиницей/цифрами. Кодируется тонами 1200/2200 Гц (Bell 202), побитовое декодирование не выполняется.';
     buildKeypad();
-    document.getElementById('dtmfRxBlock').style.display = m==='dtmf' ? 'block' : 'none';
+    updateStats(m);
+    document.getElementById('dtmfRxBlock').style.display = (m==='dtmf' || m==='dtmf36') ? 'block' : 'none';
     document.getElementById('afskRxBlock').style.display = m==='afsk' ? 'block' : 'none';
   }
+  btnDTMF36.addEventListener('click', ()=>setMode('dtmf36'));
   btnDTMF.addEventListener('click', ()=>setMode('dtmf'));
   btnAFSK.addEventListener('click', ()=>setMode('afsk'));
 
@@ -310,12 +350,18 @@
   }
 
   // ---- DTMF generation ----
+  // ---- DTMF generation (thin wrapper over the generic two-tone scheduler) ----
   function scheduleDTMF(ctx, dest, text, startTime){
-    const durTone = 0.18, gap = 0.08;
+    return scheduleTwoTone(ctx, dest, text, startTime, DTMF_FREQ);
+  }
+
+  // ---- Generic two-tone scheduler (used for both DTMF and DTMF-36) ----
+  function scheduleTwoTone(ctx, dest, text, startTime, freqTable){
+    const durTone = 0.18, gap = 0.12;
     let t = startTime;
-    const chars = text.toUpperCase().split('').filter(c => DTMF_FREQ[c]);
+    const chars = text.toUpperCase().split('').filter(c => freqTable[c]);
     chars.forEach(c=>{
-      const [f1,f2] = DTMF_FREQ[c];
+      const [f1,f2] = freqTable[c];
       [f1,f2].forEach(freq=>{
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -331,7 +377,7 @@
       });
       t += durTone + gap;
     });
-    return t; // end time
+    return t;
   }
 
   // ---- AFSK 1200 (Bell 202) generation, simple bit-per-tone (not true AX.25 framing, illustrative) ----
@@ -368,6 +414,18 @@
   function play(){
     const text = msgInput.value.trim();
     if(!text || isPlaying) return;
+
+    if(mode === 'dtmf' || mode === 'dtmf36'){
+      const table = mode === 'dtmf' ? DTMF_FREQ : DTMF36_FREQ;
+      const validChars = text.toUpperCase().split('').filter(c => table[c]);
+      if(validChars.length === 0){
+        statusText.textContent = mode === 'dtmf'
+          ? 'Нет ни одного символа 0–9,*,#,A–D в сообщении — нечего передавать'
+          : 'Нет ни одного символа A–Z,0–9 в сообщении — нечего передавать';
+        return;
+      }
+    }
+
     ensureCtx();
 
     const masterGain = audioCtx.createGain();
@@ -380,6 +438,8 @@
     let endTime;
     if(mode === 'dtmf'){
       endTime = scheduleDTMF(audioCtx, masterGain, text, startTime);
+    } else if(mode === 'dtmf36'){
+      endTime = scheduleTwoTone(audioCtx, masterGain, text, startTime, DTMF36_FREQ);
     } else {
       endTime = scheduleAFSK(audioCtx, masterGain, text, startTime);
     }
@@ -495,8 +555,6 @@
 
   const LOW_FREQS  = [697,770,852,941];
   const HIGH_FREQS = [1209,1336,1477,1633];
-  const DTMF_MAP = {}; // "row,col" -> char
-  Object.entries(DTMF_FREQ).forEach(([ch,[lo,hi]])=>{ DTMF_MAP[lo+','+hi] = ch; });
 
   function goertzelMag(samples, sampleRate, freq){
     const N = samples.length;
@@ -511,54 +569,64 @@
     return Math.sqrt(q1*q1 + q2*q2 - q1*q2*coeff);
   }
 
-  let dtmfState = 'idle'; // idle | active
-  let dtmfActiveChar = null;
-  let dtmfStableCount = 0;
-  let dtmfSilenceCount = 0;
+  // ---- Generic two-tone decoder factory (same principle for DTMF and DTMF-36) ----
+  function makeMatrixDecoder(rowFreqs, colFreqs, revMap, onChar){
+    let state = 'idle';
+    let candidateChar = null;
+    let candidateCount = 0;
+    let noToneCount = 0;
 
-  function processDTMF(samples, sampleRate){
-    // energy gate (silence detection) — Float32 samples in [-1,1]
-    let energy = 0;
-    for(let i=0;i<samples.length;i++) energy += samples[i]*samples[i];
-    energy = Math.sqrt(energy/samples.length);
-    if(energy < 0.004){
-      dtmfSilenceCount++;
-      if(dtmfSilenceCount > 2){ dtmfState='idle'; dtmfActiveChar=null; dtmfStableCount=0; }
-      return;
-    }
-    dtmfSilenceCount = 0;
+    return function process(samples, sampleRate){
+      const lowMags  = rowFreqs.map(f=>goertzelMag(samples,sampleRate,f));
+      const highMags = colFreqs.map(f=>goertzelMag(samples,sampleRate,f));
 
-    const lowMags  = LOW_FREQS.map(f=>goertzelMag(samples,sampleRate,f));
-    const highMags = HIGH_FREQS.map(f=>goertzelMag(samples,sampleRate,f));
+      let bestLowIdx = 0, bestHighIdx = 0;
+      lowMags.forEach((m,i)=>{ if(m>lowMags[bestLowIdx]) bestLowIdx=i; });
+      highMags.forEach((m,i)=>{ if(m>highMags[bestHighIdx]) bestHighIdx=i; });
 
-    let bestLowIdx = 0, bestHighIdx = 0;
-    lowMags.forEach((m,i)=>{ if(m>lowMags[bestLowIdx]) bestLowIdx=i; });
-    highMags.forEach((m,i)=>{ if(m>highMags[bestHighIdx]) bestHighIdx=i; });
+      const bestLow = rowFreqs[bestLowIdx], bestLowMag = lowMags[bestLowIdx];
+      const bestHigh = colFreqs[bestHighIdx], bestHighMag = highMags[bestHighIdx];
 
-    const bestLow = LOW_FREQS[bestLowIdx], bestLowMag = lowMags[bestLowIdx];
-    const bestHigh = HIGH_FREQS[bestHighIdx], bestHighMag = highMags[bestHighIdx];
+      const meanLow = lowMags.reduce((a,b)=>a+b,0)/lowMags.length;
+      const meanHigh = highMags.reduce((a,b)=>a+b,0)/highMags.length;
+      const toneDetected = (bestLowMag >= meanLow*1.8 && bestHighMag >= meanHigh*1.8);
+      const ch = toneDetected ? revMap[bestLow+','+bestHigh] : null;
 
-    // relative dominance check: best tone must clearly stand out among its own group
-    const meanLow = lowMags.reduce((a,b)=>a+b,0)/lowMags.length;
-    const meanHigh = highMags.reduce((a,b)=>a+b,0)/highMags.length;
-    if(bestLowMag < meanLow*1.8 || bestHighMag < meanHigh*1.8) return;
+      if(!ch){
+        noToneCount++;
+        candidateChar = null;
+        candidateCount = 0;
+        if(noToneCount >= 2){ state = 'idle'; }
+        return;
+      }
+      noToneCount = 0;
 
-    const ch = DTMF_MAP[bestLow+','+bestHigh];
-    if(!ch) return;
+      if(ch === candidateChar){
+        candidateCount++;
+      } else {
+        candidateChar = ch;
+        candidateCount = 1;
+      }
 
-    if(ch === dtmfActiveChar){
-      dtmfStableCount++;
-    } else {
-      dtmfActiveChar = ch;
-      dtmfStableCount = 1;
-    }
-
-    if(dtmfStableCount === 2 && dtmfState==='idle'){
-      dtmfState = 'active';
-      decodedText.textContent += ch;
-      rxStatus.textContent = 'Принято: ' + ch;
-    }
+      if(candidateCount >= 2 && state === 'idle'){
+        state = 'active';
+        onChar(ch);
+      }
+    };
   }
+
+  const DTMF_MAP = {}; // "row,col" -> char
+  Object.entries(DTMF_FREQ).forEach(([ch,[lo,hi]])=>{ DTMF_MAP[lo+','+hi] = ch; });
+  const DTMF36_MAP = {};
+  Object.entries(DTMF36_FREQ).forEach(([ch,[lo,hi]])=>{ DTMF36_MAP[lo+','+hi] = ch; });
+
+  function onDecodedChar(ch){
+    decodedText.textContent += ch;
+    rxStatus.textContent = 'Принято: ' + ch;
+  }
+
+  const processDTMFDecode = makeMatrixDecoder(LOW_FREQS, HIGH_FREQS, DTMF_MAP, onDecodedChar);
+  const processDTMF36Decode = makeMatrixDecoder(DTMF36_ROWS, DTMF36_COLS, DTMF36_MAP, onDecodedChar);
 
   // rough AFSK tone presence indicator (not bit-accurate decoding)
   function processAFSKIndicator(samples, sampleRate){
@@ -603,7 +671,9 @@
     rxProcessor.onaudioprocess = (e)=>{
       const data = e.inputBuffer.getChannelData(0);
       if(mode === 'dtmf'){
-        processDTMF(data, rxCtx.sampleRate);
+        processDTMFDecode(data, rxCtx.sampleRate);
+      } else if(mode === 'dtmf36'){
+        processDTMF36Decode(data, rxCtx.sampleRate);
       } else {
         processAFSKIndicator(data, rxCtx.sampleRate);
       }
