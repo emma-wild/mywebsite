@@ -165,7 +165,7 @@
   <div class="panel" data-label="Режим передачи">
     <div class="modes">
       <div class="mode-btn active" id="btnDTMF">DTMF</div>
-      <div class="mode-btn" id="btnDTMF36">DTMF-36</div>
+      <div class="mode-btn" id="btnDTMF36">DTMF-42</div>
       <div class="mode-btn" id="btnAFSK">AFSK 1200</div>
     </div>
 
@@ -272,21 +272,22 @@
   };
   const keys = ['1','2','3','4','5','6','7','8','9','*','0','#'];
 
-  // Two-tone matrix code covering full A-Z + 0-9 (6x6 = 36 symbols) — same
-  // principle as DTMF (one tone from each of two disjoint groups), just a
-  // bigger alphabet. Reliably decodable with the same Goertzel approach.
-  const DTMF36_ROWS = [700,850,1000,1150,1300,1450];
+  // Two-tone matrix code covering A-Z + 0-9 + space (37 symbols) using a
+  // 7x6 = 42 slot grid — same principle as DTMF (one tone from each of two
+  // disjoint groups), just a bigger alphabet. Reliably decodable with the
+  // same Goertzel approach.
+  const DTMF36_ROWS = [550,700,850,1000,1150,1300,1450];
   const DTMF36_COLS = [1700,1850,2000,2150,2300,2450];
 
   // Dedicated marker (sync) tone pair — used as preamble, trailer, and
   // active inter-symbol separator instead of relying on silence. Chosen
-  // well outside both the DTMF and DTMF-36 frequency ranges (700–1633Hz
-  // and 700–2450Hz) so it can never be confused with an alphabet symbol.
-  const MARKER_ROW = 500;
+  // well outside both the DTMF and DTMF-42 frequency ranges so it can
+  // never be confused with an alphabet symbol.
+  const MARKER_ROW = 400;
   const MARKER_COL = 2700;
   const MARKER_FREQ = [MARKER_ROW, MARKER_COL];
   const MARKER_TOKEN = 'MARKER';
-  const DTMF36_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const DTMF36_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ';
   const DTMF36_FREQ = {}; // char -> [rowFreq, colFreq]
   DTMF36_ALPHABET.split('').forEach((ch,i)=>{
     const r = Math.floor(i/6), c = i%6;
@@ -310,12 +311,12 @@
   buildKeypad();
 
   const statsText = document.getElementById('statsText');
-  const SYMBOL_PERIOD = 0.24 + 0.16; // durTone + markerDur, shared by DTMF and DTMF-36 (steady-state per symbol, marker framing)
+  const SYMBOL_PERIOD = 0.24 + 0.16; // durTone + markerDur, shared by DTMF and DTMF-42 (steady-state per symbol, marker framing)
   const AFSK_BAUD = 1200;
 
   function updateStats(m){
     if(m === 'dtmf' || m === 'dtmf36'){
-      const alphabetSize = m === 'dtmf' ? 16 : 36;
+      const alphabetSize = m === 'dtmf' ? 16 : 37;
       const baud = 1/SYMBOL_PERIOD;
       const bitsPerSymbol = Math.log2(alphabetSize);
       const bps = baud * bitsPerSymbol;
@@ -334,11 +335,11 @@
     btnDTMF.classList.toggle('active', m==='dtmf');
     btnDTMF36.classList.toggle('active', m==='dtmf36');
     btnAFSK.classList.toggle('active', m==='afsk');
-    modeLabel.textContent = m==='dtmf' ? 'DTMF' : (m==='dtmf36' ? 'DTMF-36' : 'AFSK 1200');
+    modeLabel.textContent = m==='dtmf' ? 'DTMF' : (m==='dtmf36' ? 'DTMF-42' : 'AFSK 1200');
     hintText.textContent = m==='dtmf'
       ? 'Разрешены: 0–9, *, #, A–D. С преамбулой/трейлером и активным маркером-разделителем (500+2700 Гц) вместо пауз тишины.'
       : m==='dtmf36'
-      ? 'Покрывает весь латинский алфавит A–Z и цифры 0–9 (36 символов, матрица 6×6). С преамбулой/трейлером и активным маркером-разделителем вместо тишины.'
+      ? 'Покрывает весь латинский алфавит A–Z, цифры 0–9 и пробел (37 символов, матрица 7×6). С преамбулой/трейлером и активным маркером-разделителем вместо тишины.'
       : 'Любой текст латиницей/цифрами. Кодируется тонами 1200/2200 Гц (Bell 202), побитовое декодирование не выполняется.';
     buildKeypad();
     updateStats(m);
@@ -381,7 +382,7 @@
 
   // ---- Generic two-tone scheduler with explicit marker framing:
   // MARKER, sym1, MARKER, sym2, MARKER, ..., symN, MARKER
-  // (used for both DTMF and DTMF-36) ----
+  // (used for both DTMF and DTMF-42) ----
   function scheduleTwoTone(ctx, dest, text, startTime, freqTable){
     const durTone = 0.24, markerDur = 0.16;
     const preambleDur = markerDur * 4; // longer than inter-symbol markers — this is the only marker that has to survive a "cold" audio start
@@ -604,15 +605,32 @@
     return Math.sqrt(q1*q1 + q2*q2 - q1*q2*coeff);
   }
 
-  // ---- Generic two-tone decoder factory (same principle for DTMF and DTMF-36) ----
+  // ---- Generic two-tone decoder factory (same principle for DTMF and DTMF-42) ----
   // Driven entirely by *positive* detections (an alphabet symbol, or the
   // MARKER token) — never by inferring a boundary from silence/no-tone.
   function makeMatrixDecoder(rowFreqs, colFreqs, revMap, onChar){
     let fsmState = 'expect_marker'; // 'expect_marker' | 'expect_symbol'
     let candidateTok = null;
     let candidateCount = 0;
+    let framesInExpectSymbol = 0;
+    const EXPECT_SYMBOL_TIMEOUT = 20; // ~900ms at a 2048-sample/44.1kHz buffer — generous vs. the near-instant real gap, but bounds how long a stray later noise/echo could be mistaken for a trailing symbol
 
     return function process(samples, sampleRate){
+      // The decoder can't tell a mid-message separator marker apart from
+      // the trailer (both look identical) — so after ANY marker it opens a
+      // short window expecting a real symbol next. Without a timeout this
+      // window would otherwise stay open forever after the trailer, and
+      // eventually some unrelated later noise (room echo, the marker's own
+      // decaying harmonics, etc.) could get misread as a phantom trailing
+      // character. Bound it instead.
+      if(fsmState === 'expect_symbol'){
+        framesInExpectSymbol++;
+        if(framesInExpectSymbol > EXPECT_SYMBOL_TIMEOUT){
+          fsmState = 'expect_marker';
+          candidateTok = null; candidateCount = 0;
+        }
+      }
+
       // Safety net only (not used for boundary logic anymore): guards the
       // degenerate "all-zero tie" case, where true digital silence makes
       // every magnitude exactly 0 and 0 >= 0*1.5 is technically true.
@@ -655,7 +673,7 @@
       candidateCount = 0; candidateTok = null;
 
       if(fsmState === 'expect_marker'){
-        if(tok === MARKER_TOKEN){ fsmState = 'expect_symbol'; }
+        if(tok === MARKER_TOKEN){ fsmState = 'expect_symbol'; framesInExpectSymbol = 0; }
         // any alphabet-looking token while waiting for the marker is
         // ignored — either stray pre-transmission noise, or the tail end
         // of the previous symbol still ringing before its trailing marker
