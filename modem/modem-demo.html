@@ -2,6 +2,9 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>МОДЕМ · Демонстратор тонового кодирования</title>
 <style>
@@ -274,6 +277,15 @@
   // bigger alphabet. Reliably decodable with the same Goertzel approach.
   const DTMF36_ROWS = [700,850,1000,1150,1300,1450];
   const DTMF36_COLS = [1700,1850,2000,2150,2300,2450];
+
+  // Dedicated marker (sync) tone pair — used as preamble, trailer, and
+  // active inter-symbol separator instead of relying on silence. Chosen
+  // well outside both the DTMF and DTMF-36 frequency ranges (700–1633Hz
+  // and 700–2450Hz) so it can never be confused with an alphabet symbol.
+  const MARKER_ROW = 500;
+  const MARKER_COL = 2700;
+  const MARKER_FREQ = [MARKER_ROW, MARKER_COL];
+  const MARKER_TOKEN = 'MARKER';
   const DTMF36_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const DTMF36_FREQ = {}; // char -> [rowFreq, colFreq]
   DTMF36_ALPHABET.split('').forEach((ch,i)=>{
@@ -298,7 +310,7 @@
   buildKeypad();
 
   const statsText = document.getElementById('statsText');
-  const SYMBOL_PERIOD = 0.18 + 0.12; // durTone + gap, shared by DTMF and DTMF-36
+  const SYMBOL_PERIOD = 0.24 + 0.16; // durTone + markerDur, shared by DTMF and DTMF-36 (steady-state per symbol, marker framing)
   const AFSK_BAUD = 1200;
 
   function updateStats(m){
@@ -324,9 +336,9 @@
     btnAFSK.classList.toggle('active', m==='afsk');
     modeLabel.textContent = m==='dtmf' ? 'DTMF' : (m==='dtmf36' ? 'DTMF-36' : 'AFSK 1200');
     hintText.textContent = m==='dtmf'
-      ? 'Разрешены: 0–9, *, #, A–D. Остальные символы будут пропущены.'
+      ? 'Разрешены: 0–9, *, #, A–D. С преамбулой/трейлером и активным маркером-разделителем (500+2700 Гц) вместо пауз тишины.'
       : m==='dtmf36'
-      ? 'Покрывает весь латинский алфавит A–Z и цифры 0–9 (36 символов, матрица 6×6). Каждый символ — своя пара тонов, надёжно декодируется обратно в текст.'
+      ? 'Покрывает весь латинский алфавит A–Z и цифры 0–9 (36 символов, матрица 6×6). С преамбулой/трейлером и активным маркером-разделителем вместо тишины.'
       : 'Любой текст латиницей/цифрами. Кодируется тонами 1200/2200 Гц (Bell 202), побитовое декодирование не выполняется.';
     buildKeypad();
     updateStats(m);
@@ -345,6 +357,18 @@
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 2048;
       analyser.smoothingTimeConstant = 0.4;
+
+      // Keep the audio output stream continuously active with an inaudible
+      // tone. Without this, the OS/driver can "sleep" the speaker between
+      // transmissions, adding onset latency that clips the very first symbol
+      // (and sometimes trims the tail of the last one when the stream idles
+      // out right after playback ends).
+      const keepAliveOsc = audioCtx.createOscillator();
+      const keepAliveGain = audioCtx.createGain();
+      keepAliveOsc.frequency.value = 30; // below audible range for most people/speakers
+      keepAliveGain.gain.value = 0.0008; // just enough to keep the DAC rendering, effectively silent
+      keepAliveOsc.connect(keepAliveGain).connect(audioCtx.destination);
+      keepAliveOsc.start();
     }
     if(audioCtx.state === 'suspended') audioCtx.resume();
   }
@@ -355,29 +379,40 @@
     return scheduleTwoTone(ctx, dest, text, startTime, DTMF_FREQ);
   }
 
-  // ---- Generic two-tone scheduler (used for both DTMF and DTMF-36) ----
+  // ---- Generic two-tone scheduler with explicit marker framing:
+  // MARKER, sym1, MARKER, sym2, MARKER, ..., symN, MARKER
+  // (used for both DTMF and DTMF-36) ----
   function scheduleTwoTone(ctx, dest, text, startTime, freqTable){
-    const durTone = 0.18, gap = 0.12;
-    let t = startTime;
-    const chars = text.toUpperCase().split('').filter(c => freqTable[c]);
-    chars.forEach(c=>{
-      const [f1,f2] = freqTable[c];
-      [f1,f2].forEach(freq=>{
+    const durTone = 0.24, markerDur = 0.16;
+    const preambleDur = markerDur * 4; // longer than inter-symbol markers — this is the only marker that has to survive a "cold" audio start
+    const leadGuard = 0.15, trailGuard = 0.15;
+    let t = startTime + leadGuard;
+
+    function playTone(freqs, dur){
+      freqs.forEach(freq=>{
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
         osc.frequency.value = freq;
         gain.gain.setValueAtTime(0, t);
         gain.gain.linearRampToValueAtTime(0.28, t+0.008);
-        gain.gain.setValueAtTime(0.28, t+durTone-0.008);
-        gain.gain.linearRampToValueAtTime(0, t+durTone);
+        gain.gain.setValueAtTime(0.28, t+dur-0.008);
+        gain.gain.linearRampToValueAtTime(0, t+dur);
         osc.connect(gain).connect(dest);
         osc.start(t);
-        osc.stop(t+durTone+0.01);
+        osc.stop(t+dur+0.01);
       });
-      t += durTone + gap;
+    }
+
+    const chars = text.toUpperCase().split('').filter(c => freqTable[c]);
+
+    playTone(MARKER_FREQ, preambleDur); t += preambleDur; // preamble — extra-long, absorbs cold-start artifacts
+    chars.forEach(c=>{
+      playTone(freqTable[c], durTone); t += durTone;
+      playTone(MARKER_FREQ, markerDur); t += markerDur; // separator (also serves as trailer after the last symbol)
     });
-    return t;
+
+    return t + trailGuard;
   }
 
   // ---- AFSK 1200 (Bell 202) generation, simple bit-per-tone (not true AX.25 framing, illustrative) ----
@@ -570,22 +605,21 @@
   }
 
   // ---- Generic two-tone decoder factory (same principle for DTMF and DTMF-36) ----
+  // Driven entirely by *positive* detections (an alphabet symbol, or the
+  // MARKER token) — never by inferring a boundary from silence/no-tone.
   function makeMatrixDecoder(rowFreqs, colFreqs, revMap, onChar){
-    let state = 'idle';
-    let candidateChar = null;
+    let fsmState = 'expect_marker'; // 'expect_marker' | 'expect_symbol'
+    let candidateTok = null;
     let candidateCount = 0;
-    let noToneCount = 0;
 
     return function process(samples, sampleRate){
-      // guard against the "all-zero tie" case first: true digital silence
-      // (e.g. the very first buffer right after starting the mic stream)
-      // makes every Goertzel magnitude exactly 0, and 0 >= 0*1.8 is technically
-      // true — without this floor, silence itself gets misread as a
-      // permanently "present" tone and the decoder never returns to idle.
+      // Safety net only (not used for boundary logic anymore): guards the
+      // degenerate "all-zero tie" case, where true digital silence makes
+      // every magnitude exactly 0 and 0 >= 0*1.5 is technically true.
       let rms = 0;
       for(let i=0;i<samples.length;i++) rms += samples[i]*samples[i];
       rms = Math.sqrt(rms/samples.length);
-      const hasSignal = rms > 0.0008; // just above true digital silence, well below any real mic noise floor
+      const hasSignal = rms > 0.0008;
 
       const lowMags  = rowFreqs.map(f=>goertzelMag(samples,sampleRate,f));
       const highMags = colFreqs.map(f=>goertzelMag(samples,sampleRate,f));
@@ -600,44 +634,65 @@
       const meanLow = lowMags.reduce((a,b)=>a+b,0)/lowMags.length;
       const meanHigh = highMags.reduce((a,b)=>a+b,0)/highMags.length;
 
-      const toneDetected = hasSignal && (bestLowMag >= meanLow*1.8 && bestHighMag >= meanHigh*1.8);
-      const ch = toneDetected ? revMap[bestLow+','+bestHigh] : null;
+      const confident = hasSignal && (bestLowMag >= meanLow*1.5 && bestHighMag >= meanHigh*1.5);
+      const tok = confident ? revMap[bestLow+','+bestHigh] : undefined;
 
-      if(!ch){
-        noToneCount++;
-        candidateChar = null;
+      if(!tok){
+        // ambiguous/transitional frame (e.g. straddling a boundary) — just
+        // wait for the next one, don't penalize or reset any FSM state.
+        candidateTok = null;
         candidateCount = 0;
-        if(noToneCount >= 2){ state = 'idle'; }
         return;
       }
-      noToneCount = 0;
 
-      if(ch === candidateChar){
-        candidateCount++;
-      } else {
-        candidateChar = ch;
-        candidateCount = 1;
-      }
+      if(tok === candidateTok){ candidateCount++; } else { candidateTok = tok; candidateCount = 1; }
+      if(candidateCount < 2) return; // need 2 consecutive confirmations of the same token
 
-      if(candidateCount >= 2 && state === 'idle'){
-        state = 'active';
-        onChar(ch);
+      // consumed — reset so a still-sounding tone doesn't re-trigger every
+      // frame (the FSM below also naturally ignores repeats of the token
+      // it's *not* currently expecting, which is what actually protects
+      // against double-counting a single long tone/marker).
+      candidateCount = 0; candidateTok = null;
+
+      if(fsmState === 'expect_marker'){
+        if(tok === MARKER_TOKEN){ fsmState = 'expect_symbol'; }
+        // any alphabet-looking token while waiting for the marker is
+        // ignored — either stray pre-transmission noise, or the tail end
+        // of the previous symbol still ringing before its trailing marker
+        // is recognized.
+      } else { // expect_symbol
+        if(tok === MARKER_TOKEN){
+          // unexpected repeat/leftover marker — ignore, keep waiting for a real symbol
+        } else {
+          onChar(tok);
+          fsmState = 'expect_marker';
+        }
       }
     };
   }
 
   const DTMF_MAP = {}; // "row,col" -> char
   Object.entries(DTMF_FREQ).forEach(([ch,[lo,hi]])=>{ DTMF_MAP[lo+','+hi] = ch; });
+  DTMF_MAP[MARKER_ROW+','+MARKER_COL] = MARKER_TOKEN;
   const DTMF36_MAP = {};
   Object.entries(DTMF36_FREQ).forEach(([ch,[lo,hi]])=>{ DTMF36_MAP[lo+','+hi] = ch; });
+  DTMF36_MAP[MARKER_ROW+','+MARKER_COL] = MARKER_TOKEN;
+
+  // extended frequency lists (with the marker frequency included as a
+  // candidate) so the decoder can recognize the marker using the exact
+  // same dominant-pair logic as any alphabet symbol.
+  const LOW_FREQS_EXT  = [MARKER_ROW, ...LOW_FREQS];
+  const HIGH_FREQS_EXT = [...HIGH_FREQS, MARKER_COL];
+  const DTMF36_ROWS_EXT = [MARKER_ROW, ...DTMF36_ROWS];
+  const DTMF36_COLS_EXT = [...DTMF36_COLS, MARKER_COL];
 
   function onDecodedChar(ch){
     decodedText.textContent += ch;
     rxStatus.textContent = 'Принято: ' + ch;
   }
 
-  const processDTMFDecode = makeMatrixDecoder(LOW_FREQS, HIGH_FREQS, DTMF_MAP, onDecodedChar);
-  const processDTMF36Decode = makeMatrixDecoder(DTMF36_ROWS, DTMF36_COLS, DTMF36_MAP, onDecodedChar);
+  const processDTMFDecode = makeMatrixDecoder(LOW_FREQS_EXT, HIGH_FREQS_EXT, DTMF_MAP, onDecodedChar);
+  const processDTMF36Decode = makeMatrixDecoder(DTMF36_ROWS_EXT, DTMF36_COLS_EXT, DTMF36_MAP, onDecodedChar);
 
   // rough AFSK tone presence indicator (not bit-accurate decoding)
   function processAFSKIndicator(samples, sampleRate){
