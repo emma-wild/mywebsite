@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MODEM://CAL · Частотный анализ канала</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #0a0d0a;
+    --panel: #10140f;
+    --panel-2: #161c14;
+    --line: #26301f;
+    --phosphor: #3dff6e;
+    --phosphor-dim: #1e7a37;
+    --amber: #ffb000;
+    --text: #d3ddc9;
+    --text-dim: #6c7a63;
+    --red: #ff4d4d;
+    --blue: #4da3ff;
+    --violet: #b98bff;
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Space Grotesk', sans-serif; min-height:100vh;}
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  .wrap{ max-width:680px; margin:0 auto; padding:18px 16px 48px; }
+
+  header{ display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:18px; }
+  header .callsign{ font-family:'JetBrains Mono', monospace; font-weight:800; font-size:20px; letter-spacing:0.5px; color:var(--phosphor); text-shadow: 0 0 12px rgba(61,255,110,0.35); }
+  header .sub{ font-size:11px; color:var(--text-dim); letter-spacing:1.2px; text-transform:uppercase; margin-top:2px;}
+
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:3px; padding:16px; margin-bottom:14px; position:relative; }
+  .panel::before{ content:attr(data-label); position:absolute; top:-9px; left:12px; background:var(--bg); padding:0 6px; font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:2px; color:var(--text-dim); text-transform:uppercase; }
+
+  .modes{ display:flex; gap:8px; }
+  .mode-btn{ flex:1; padding:12px 8px; text-align:center; background:var(--panel-2); border:1px solid var(--line); border-radius:2px; font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; letter-spacing:0.5px; color:var(--text-dim); cursor:pointer; }
+  .mode-btn.active{ color:#03170a; background:var(--phosphor); border-color:var(--phosphor); box-shadow:0 0 16px rgba(61,255,110,0.35); }
+
+  input[type=text]{ width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:2px; color:var(--text); font-family:'JetBrains Mono', monospace; font-size:14px; padding:10px 12px; outline:none; }
+  input[type=text]:focus{ border-color:var(--phosphor-dim); }
+  input[type=text]::placeholder{ color:var(--text-dim); }
+
+  .row{ display:flex; gap:10px; margin-top:12px; }
+  button.primary{ flex:1; padding:14px; border:none; border-radius:2px; background:var(--phosphor); color:#03170a; font-weight:700; font-family:'JetBrains Mono', monospace; font-size:13px; letter-spacing:0.5px; cursor:pointer; text-transform:uppercase; }
+  button.primary:active{ transform:scale(0.98); }
+  button.primary.playing{ background:var(--red); box-shadow:0 0 20px rgba(255,77,77,0.45); }
+  button.primary:disabled{ opacity:0.4; cursor:default; }
+  button.secondary{ padding:14px 16px; border:1px solid var(--line); border-radius:2px; background:var(--panel-2); color:var(--text-dim); font-family:'JetBrains Mono', monospace; font-size:12px; cursor:pointer; }
+
+  .vol-row{ display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .vol-row label{ font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; white-space:nowrap;}
+  input[type=range]{ flex:1; accent-color:var(--phosphor); }
+
+  canvas{ width:100%; display:block; background:#050705; border-radius:2px; }
+  #liveScope{ height:70px; margin-top:12px; border:1px solid var(--line); }
+  #chartCanvas{ height:220px; margin-top:10px; border:1px solid var(--line); }
+
+  .status-row{ display:flex; align-items:center; gap:8px; margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim);}
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--text-dim); flex-shrink:0; }
+  .dot.on{ background:var(--phosphor); box-shadow:0 0 8px var(--phosphor); }
+
+  .hint{ font-size:12px; color:var(--text-dim); line-height:1.55; }
+  .hint b{ color:var(--text); }
+
+  .curve-list{ margin-top:10px; }
+  .curve-item{ display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-family:'JetBrains Mono',monospace; font-size:12px; }
+  .curve-item:last-child{ border-bottom:none; }
+  .swatch{ width:12px; height:12px; border-radius:2px; flex-shrink:0; }
+  .curve-item span.name{ flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .curve-item button{ background:none; border:1px solid var(--line); color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-size:11px; padding:3px 8px; border-radius:2px; cursor:pointer; }
+
+  footer{ text-align:center; margin-top:24px; font-size:10.5px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; letter-spacing:0.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="callsign">MODEM://CAL</div>
+      <div class="sub">Частотный анализ канала связи</div>
+    </div>
+  </header>
+
+  <div class="panel" data-label="Роль устройства">
+    <div class="modes">
+      <div class="mode-btn active" id="btnTX">Передатчик (TX)</div>
+      <div class="mode-btn" id="btnRX">Приёмник (RX)</div>
+    </div>
+    <div class="hint" style="margin-top:12px;" id="roleHint">
+      Это устройство проигрывает ступенчатый свип-сигнал (<span id="freqRangeHint"></span>) через динамик. На втором устройстве откройте эту же страницу, выберите «Приёмник», нажмите «Начать запись» — и только потом здесь жмите «Играть свип».
+    </div>
+  </div>
+
+  <!-- TX PANEL -->
+  <div class="panel" id="txPanel" data-label="Передача свипа">
+    <div class="row" style="margin-top:0;">
+      <button class="primary" id="playBtn">▶ Играть свип</button>
+    </div>
+    <div class="vol-row">
+      <label>ГРОМКОСТЬ</label>
+      <input type="range" id="volSlider" min="0" max="100" value="90">
+    </div>
+    <div class="status-row">
+      <div class="dot" id="txDot"></div>
+      <span id="txStatus">Готов</span>
+    </div>
+    <canvas id="liveScope"></canvas>
+  </div>
+
+  <!-- RX PANEL -->
+  <div class="panel" id="rxPanel" data-label="Приём и анализ" style="display:none;">
+    <input type="text" id="labelInput" placeholder="Название серии, напр. «Ноутбук TX → Pixel7 RX»">
+    <div class="row" style="margin-top:12px;">
+      <button class="primary" id="rxBtn">🎙 Начать запись</button>
+    </div>
+    <div class="status-row">
+      <div class="dot" id="rxDot"></div>
+      <span id="rxStatus">Микрофон не активен</span>
+    </div>
+    <div class="status-row" style="margin-top:4px;">
+      <span class="mono" style="color:var(--amber);">Замеров в серии: <b id="iterCount">0</b></span>
+    </div>
+    <canvas id="liveBars" style="height:120px; margin-top:12px; border:1px solid var(--line);"></canvas>
+    <div class="row">
+      <button class="primary" id="downloadBtn" disabled>💾 Сохранить файл (со всеми замерами серии)</button>
+    </div>
+    <div class="hint" style="margin-top:8px;">
+      Приём можно не останавливать между запусками свипа на передатчике — каждый новый синхро-тон засчитывается как следующий замер в той же серии. Останавливать запись нужно, только когда закончили всю серию; сохранить файл можно в любой момент, даже не останавливая приём.
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="panel" id="resultsPanel" data-label="Последний замер / среднее по серии" style="display:none;">
+    <canvas id="chartCanvas"></canvas>
+    <div class="row">
+      <button class="secondary" id="addToCompareBtn" style="flex:1;">В сравнение (среднее по серии)</button>
+    </div>
+  </div>
+
+  <!-- COMPARISON -->
+  <div class="panel" data-label="Сравнение замеров">
+    <div class="row" style="margin-top:0;">
+      <button class="secondary" id="importBtn" style="flex:1;">⬆ Загрузить JSON для сравнения</button>
+      <input type="file" id="fileInput" accept="application/json" style="display:none;" multiple>
+    </div>
+    <canvas id="compareCanvas" style="height:220px; margin-top:12px; border:1px solid var(--line);"></canvas>
+    <div class="curve-list" id="curveList"></div>
+  </div>
+
+  <div class="panel" data-label="Как это работает">
+    <div class="hint">
+      Свип начинается с короткого синхро-тона (220 Гц), за которым идёт набор одиночных тонов по возрастанию частоты. Приёмник слушает через микрофон, по синхро-тону привязывает свою временную шкалу к передатчику, и для <b>каждой</b> тестовой частоты запоминает пиковую громкость только в её ожидаемом временном окне — случайный шум за пределами этого окна на результат не влияет.<br><br>
+      Результат — относительная АЧХ канала: 0 дБ = самая громко принятая частота, всё остальное показано как ослабление относительно неё.
+    </div>
+  </div>
+
+  <footer>WEB AUDIO API · GOERTZEL · РАБОТАЕТ ОФЛАЙН</footer>
+</div>
+
+<script>
+(() => {
+  // ---- Test frequency list ----
+  const FREQ_MIN = 300, FREQ_MAX = 3000, FREQ_STEP = 100;
+  const TEST_FREQS = [];
+  for(let f=FREQ_MIN; f<=FREQ_MAX; f+=FREQ_STEP) TEST_FREQS.push(f);
+  document.getElementById('freqRangeHint').textContent = `${FREQ_MIN}–${FREQ_MAX} Гц, шаг ${FREQ_STEP} Гц, ${TEST_FREQS.length} точек`;
+
+  const TONE_DUR = 0.22, GAP = 0.09, LEAD_GUARD = 0.3, TRAIL_GUARD = 0.3;
+
+  // Sync tone: played once at the very start, well below the test range,
+  // so the receiver can anchor its own timeline to the sweep without any
+  // external time synchronization between the two devices.
+  const SYNC_FREQ = 220;
+  const SYNC_DUR = 0.4;
+  const GAP_AFTER_SYNC = 0.2;
+  const WINDOW_MARGIN = 0.15; // seconds of slack on each side of every expected per-frequency window, absorbing sync-detection latency and minor timing jitter
+
+  // ---- Goertzel ----
+  function goertzelMag(samples, sampleRate, freq){
+    const N = samples.length;
+    const k = Math.round(N*freq/sampleRate);
+    const w = 2*Math.PI*k/N;
+    const cosine = Math.cos(w), sine = Math.sin(w), coeff = 2*cosine;
+    let q0=0,q1=0,q2=0;
+    for(let i=0;i<N;i++){ q0 = coeff*q1 - q2 + samples[i]; q2=q1; q1=q0; }
+    return Math.sqrt(q1*q1 + q2*q2 - q1*q2*coeff);
+  }
+
+  // ---- Role switching ----
+  const btnTX = document.getElementById('btnTX');
+  const btnRX = document.getElementById('btnRX');
+  const txPanel = document.getElementById('txPanel');
+  const rxPanel = document.getElementById('rxPanel');
+  const roleHint = document.getElementById('roleHint');
+
+  function setRole(role){
+    btnTX.classList.toggle('active', role==='tx');
+    btnRX.classList.toggle('active', role==='rx');
+    txPanel.style.display = role==='tx' ? 'block' : 'none';
+    rxPanel.style.display = role==='rx' ? 'block' : 'none';
+    roleHint.innerHTML = role==='tx'
+      ? `Это устройство сначала проигрывает короткий синхро-тон (220 Гц, ниже диапазона теста), затем сам свип (<span>${FREQ_MIN}–${FREQ_MAX} Гц, шаг ${FREQ_STEP} Гц, ${TEST_FREQS.length} точек</span>) через динамик. На втором устройстве откройте эту же страницу, выберите «Приёмник», нажмите «Начать запись» — и только потом здесь жмите «Играть свип».`
+      : `Это устройство слушает через микрофон. По синхро-тону в начале каждого свипа оно само привязывает свою временную шкалу к передатчику — засекать момент старта вручную не нужно. Впишите название серии, нажмите «Начать запись», подождите секунду, затем на втором устройстве запускайте «Играть свип» сколько угодно раз подряд — каждый прогон засчитается как отдельный замер в одной серии. Когда хватит замеров — сохраните файл.`;
+  }
+  btnTX.addEventListener('click', ()=>setRole('tx'));
+  btnRX.addEventListener('click', ()=>setRole('rx'));
+
+  // ================= TX =================
+  const playBtn = document.getElementById('playBtn');
+  const volSlider = document.getElementById('volSlider');
+  const txDot = document.getElementById('txDot');
+  const txStatus = document.getElementById('txStatus');
+  const liveScope = document.getElementById('liveScope');
+
+  let txCtx = null, txAnalyser = null, isPlaying = false, txRaf = null;
+
+  function ensureTxCtx(){
+    if(!txCtx){
+      txCtx = new (window.AudioContext || window.webkitAudioContext)();
+      txAnalyser = txCtx.createAnalyser();
+      txAnalyser.fftSize = 1024;
+      // keep-alive tone so the OS/driver doesn't sleep the speaker between sweeps
+      const keepAliveOsc = txCtx.createOscillator();
+      const keepAliveGain = txCtx.createGain();
+      keepAliveOsc.frequency.value = 30;
+      keepAliveGain.gain.value = 0.0008;
+      keepAliveOsc.connect(keepAliveGain).connect(txCtx.destination);
+      keepAliveOsc.start();
+    }
+    if(txCtx.state === 'suspended') txCtx.resume();
+  }
+
+  function playSweep(){
+    if(isPlaying) return;
+    ensureTxCtx();
+    const masterGain = txCtx.createGain();
+    masterGain.gain.value = volSlider.value/100;
+    masterGain.connect(txAnalyser);
+    masterGain.connect(txCtx.destination);
+
+    function playTone(freq, dur, startT){
+      const osc = txCtx.createOscillator();
+      const gain = txCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, startT);
+      gain.gain.linearRampToValueAtTime(0.28, startT+0.01);
+      gain.gain.setValueAtTime(0.28, startT+dur-0.01);
+      gain.gain.linearRampToValueAtTime(0, startT+dur);
+      osc.connect(gain).connect(masterGain);
+      osc.start(startT);
+      osc.stop(startT+dur+0.01);
+    }
+
+    let t = txCtx.currentTime + LEAD_GUARD;
+    playTone(SYNC_FREQ, SYNC_DUR, t); // sync anchor — RX times everything from when this tone ends
+    t += SYNC_DUR + GAP_AFTER_SYNC;
+    TEST_FREQS.forEach(freq=>{
+      playTone(freq, TONE_DUR, t);
+      t += TONE_DUR + GAP;
+    });
+    const endTime = t + TRAIL_GUARD;
+
+    isPlaying = true;
+    playBtn.classList.add('playing');
+    playBtn.textContent = '■ Идёт свип...';
+    txDot.classList.add('on');
+    txStatus.textContent = `Синхро-тон + ${TEST_FREQS.length} тонов (${FREQ_MIN}–${FREQ_MAX} Гц)`;
+    drawLiveScope();
+
+    const totalMs = (endTime - txCtx.currentTime) * 1000;
+    setTimeout(()=>{
+      isPlaying = false;
+      playBtn.classList.remove('playing');
+      playBtn.textContent = '▶ Играть свип';
+      txDot.classList.remove('on');
+      txStatus.textContent = 'Готов';
+      cancelAnimationFrame(txRaf);
+    }, Math.max(totalMs, 200));
+  }
+  playBtn.addEventListener('click', playSweep);
+
+  function drawLiveScope(){
+    const ratio = window.devicePixelRatio || 1;
+    const rect = liveScope.getBoundingClientRect();
+    liveScope.width = rect.width*ratio; liveScope.height = rect.height*ratio;
+    const ctx2d = liveScope.getContext('2d');
+    ctx2d.setTransform(ratio,0,0,ratio,0,0);
+    const w = liveScope.clientWidth, h = liveScope.clientHeight;
+    const timeData = new Uint8Array(txAnalyser.fftSize);
+    function loop(){
+      if(!isPlaying) return;
+      txAnalyser.getByteTimeDomainData(timeData);
+      ctx2d.fillStyle = 'rgba(5,7,5,0.4)';
+      ctx2d.fillRect(0,0,w,h);
+      ctx2d.strokeStyle = '#3dff6e';
+      ctx2d.lineWidth = 1.4;
+      ctx2d.beginPath();
+      const slice = w/timeData.length;
+      let x=0;
+      for(let i=0;i<timeData.length;i++){
+        const v = timeData[i]/128.0;
+        const y = v*h/2;
+        if(i===0) ctx2d.moveTo(x,y); else ctx2d.lineTo(x,y);
+        x+=slice;
+      }
+      ctx2d.stroke();
+      txRaf = requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  // ================= RX =================
+  const rxBtn = document.getElementById('rxBtn');
+  const rxDot = document.getElementById('rxDot');
+  const rxStatus = document.getElementById('rxStatus');
+  const liveBars = document.getElementById('liveBars');
+  const resultsPanel = document.getElementById('resultsPanel');
+  const labelInput = document.getElementById('labelInput');
+  const chartCanvas = document.getElementById('chartCanvas');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const addToCompareBtn = document.getElementById('addToCompareBtn');
+
+  let rxCtx = null, rxStream = null, rxProcessor = null, rxSourceNode = null, rxActive = false;
+
+  // precompute expected [start,end] window (seconds, relative to sync-tone-end) for each test frequency
+  const EXPECTED_WINDOWS = TEST_FREQS.map((f,i)=>{
+    const start = GAP_AFTER_SYNC + i*(TONE_DUR+GAP);
+    return { start: start - WINDOW_MARGIN, end: start + TONE_DUR + WINDOW_MARGIN };
+  });
+  const SWEEP_END_REL_TIME = EXPECTED_WINDOWS[EXPECTED_WINDOWS.length-1].end;
+
+  let sessionResults = []; // array of {points:[{freq,mag,dB}]} — one entry per completed sweep iteration this session
+
+  function updateIterCount(){ document.getElementById('iterCount').textContent = sessionResults.length; }
+
+  async function startRx(){
+    sessionResults = [];
+    updateIterCount();
+    downloadBtn.disabled = true;
+    resultsPanel.style.display = 'none';
+    try{
+      rxStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+    }catch(e){
+      rxStatus.textContent = 'Ошибка доступа к микрофону: ' + e.message;
+      return;
+    }
+    rxCtx = new (window.AudioContext || window.webkitAudioContext)();
+    rxSourceNode = rxCtx.createMediaStreamSource(rxStream);
+    const bufSize = 2048;
+    rxProcessor = rxCtx.createScriptProcessor(bufSize,1,1);
+    const silentGain = rxCtx.createGain();
+    silentGain.gain.value = 0;
+    rxSourceNode.connect(rxProcessor);
+    rxProcessor.connect(silentGain);
+    silentGain.connect(rxCtx.destination);
+
+    let frameMags = new Array(TEST_FREQS.length).fill(0);
+    let elapsedSamples = 0;
+    let syncState = 'waiting'; // waiting -> active -> done (per iteration; resets to 'waiting' after each completed sweep)
+    let syncCandidateCount = 0;
+    let t0 = null;
+    let curPeaks = new Array(TEST_FREQS.length).fill(0);
+
+    function finishIteration(){
+      const maxPeak = Math.max(...curPeaks);
+      const points = TEST_FREQS.map((f,i)=>({
+        freq: f, mag: curPeaks[i],
+        dB: maxPeak>0 ? 20*Math.log10((curPeaks[i]||1e-9)/maxPeak) : -99
+      }));
+      sessionResults.push({points});
+      updateIterCount();
+      downloadBtn.disabled = false;
+      showLiveAverage();
+      // re-arm for the next sweep in this series
+      curPeaks = new Array(TEST_FREQS.length).fill(0);
+      syncState = 'waiting'; syncCandidateCount = 0; t0 = null;
+      rxStatus.textContent = `Замер #${sessionResults.length} сохранён в серию. Жду следующий синхро-тон...`;
+    }
+
+    rxProcessor.onaudioprocess = (e)=>{
+      const data = e.inputBuffer.getChannelData(0);
+      const bufStartTime = elapsedSamples / rxCtx.sampleRate;
+      elapsedSamples += data.length;
+
+      TEST_FREQS.forEach((f,i)=>{ frameMags[i] = goertzelMag(data, rxCtx.sampleRate, f); });
+      drawLiveBars(frameMags);
+
+      if(syncState !== 'done'){
+        let rms = 0;
+        for(let i=0;i<data.length;i++) rms += data[i]*data[i];
+        rms = Math.sqrt(rms/data.length);
+        const syncMag = goertzelMag(data, rxCtx.sampleRate, SYNC_FREQ);
+        const meanTestMag = frameMags.reduce((a,b)=>a+b,0)/frameMags.length;
+        const syncPresent = rms > 0.0008 && syncMag > meanTestMag*1.5;
+
+        if(syncState === 'waiting'){
+          if(syncPresent){
+            syncCandidateCount++;
+            if(syncCandidateCount >= 2){ syncState = 'active'; syncCandidateCount = 0; rxStatus.textContent = 'Синхро-тон обнаружен, жду его окончания...'; }
+          } else { syncCandidateCount = 0; }
+        } else if(syncState === 'active'){
+          if(!syncPresent){
+            syncCandidateCount++;
+            if(syncCandidateCount >= 2){
+              syncState = 'done';
+              t0 = bufStartTime;
+              rxStatus.textContent = `Синхронизировано — идёт приём замера #${sessionResults.length+1}...`;
+            }
+          } else { syncCandidateCount = 0; }
+        }
+        return;
+      }
+
+      const relTime = bufStartTime - t0;
+      TEST_FREQS.forEach((f,i)=>{
+        const win = EXPECTED_WINDOWS[i];
+        if(relTime >= win.start && relTime <= win.end){
+          if(frameMags[i] > curPeaks[i]) curPeaks[i] = frameMags[i];
+        }
+      });
+
+      if(relTime > SWEEP_END_REL_TIME) finishIteration();
+    };
+
+    rxActive = true;
+    rxBtn.textContent = '■ Остановить приём';
+    rxBtn.classList.add('playing');
+    rxDot.classList.add('on');
+    rxStatus.textContent = 'Слушаю, жду синхро-тон... запустите свип на передатчике';
+  }
+
+  function stopRx(){
+    if(rxProcessor){ rxProcessor.disconnect(); rxProcessor.onaudioprocess = null; }
+    if(rxSourceNode) rxSourceNode.disconnect();
+    if(rxStream) rxStream.getTracks().forEach(t=>t.stop());
+    if(rxCtx) rxCtx.close();
+    rxActive = false;
+    rxBtn.textContent = '🎙 Начать запись';
+    rxBtn.classList.remove('playing');
+    rxDot.classList.remove('on');
+    rxStatus.textContent = sessionResults.length > 0
+      ? `Остановлено. В серии ${sessionResults.length} замер(ов) — можно сохранить файл.`
+      : 'Микрофон не активен';
+  }
+
+  rxBtn.addEventListener('click', ()=>{ if(rxActive) stopRx(); else startRx(); });
+
+  function computeAveraged(){
+    if(sessionResults.length === 0) return null;
+    return TEST_FREQS.map((f,i)=>{
+      const mags = sessionResults.map(r=>r.points[i].mag);
+      const meanMag = mags.reduce((a,b)=>a+b,0)/mags.length;
+      const dBs = sessionResults.map(r=>r.points[i].dB);
+      const meanDb = dBs.reduce((a,b)=>a+b,0)/dBs.length;
+      const variance = dBs.reduce((a,b)=>a+(b-meanDb)*(b-meanDb),0)/dBs.length;
+      return { freq: f, mag: meanMag, dB: meanDb, dBstd: Math.sqrt(variance) };
+    });
+  }
+
+  function showLiveAverage(){
+    const avg = computeAveraged();
+    if(!avg) return;
+    resultsPanel.style.display = 'block';
+    drawResultChart(chartCanvas, [{ label:`Среднее по ${sessionResults.length} замер(ам)`, color:'#3dff6e', points: avg }]);
+  }
+
+  function drawLiveBars(mags){
+    const ratio = window.devicePixelRatio || 1;
+    const rect = liveBars.getBoundingClientRect();
+    liveBars.width = rect.width*ratio; liveBars.height = rect.height*ratio;
+    const ctx2d = liveBars.getContext('2d');
+    ctx2d.setTransform(ratio,0,0,ratio,0,0);
+    const w = liveBars.clientWidth, h = liveBars.clientHeight;
+    ctx2d.fillStyle = '#050705';
+    ctx2d.fillRect(0,0,w,h);
+    const maxM = Math.max(...mags, 1);
+    const bw = w/mags.length;
+    mags.forEach((m,i)=>{
+      const bh = (m/maxM)*h*0.95;
+      ctx2d.fillStyle = '#3dff6e';
+      ctx2d.fillRect(i*bw+1, h-bh, bw-2, bh);
+    });
+  }
+
+  downloadBtn.addEventListener('click', ()=>{
+    if(sessionResults.length === 0) return;
+    const label = labelInput.value.trim() || 'Без названия';
+    const exportData = {
+      label,
+      timestamp: new Date().toISOString(),
+      sampleRate: rxCtx ? rxCtx.sampleRate : null,
+      iterations: sessionResults,
+      averaged: { points: computeAveraged() }
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeLabel = label.replace(/[^a-zA-Zа-яА-Я0-9_-]+/g,'_').slice(0,40);
+    a.href = url; a.download = `freqresp_${safeLabel}_${sessionResults.length}x_${Date.now()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ================= COMPARISON =================
+  const importBtn = document.getElementById('importBtn');
+  const fileInput = document.getElementById('fileInput');
+  const compareCanvas = document.getElementById('compareCanvas');
+  const curveList = document.getElementById('curveList');
+  const COLORS = ['#3dff6e','#ffb000','#4da3ff','#b98bff','#ff4d4d','#4dffe8','#ff8a4d','#c8ff4d'];
+  let compareCurves = []; // {label, color, points, visible}
+
+  importBtn.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', (e)=>{
+    Array.from(e.target.files).forEach(file=>{
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try{
+          const data = JSON.parse(reader.result);
+          // new format: {iterations:[...], averaged:{points:[...]}} — use the averaged curve
+          // old format (single measurement): {points:[...]} — use as-is
+          const points = data.averaged ? data.averaged.points : data.points;
+          const n = data.iterations ? data.iterations.length : 1;
+          const label = (data.label || file.name) + (n>1 ? ` (n=${n})` : '');
+          addCurve(label, points);
+        }catch(err){ alert('Не удалось прочитать файл: ' + file.name); }
+      };
+      reader.readAsText(file);
+    });
+    fileInput.value = '';
+  });
+
+  addToCompareBtn.addEventListener('click', ()=>{
+    const avg = computeAveraged();
+    if(!avg) return;
+    const label = (labelInput.value.trim() || `Серия ${compareCurves.length+1}`) + ` (n=${sessionResults.length})`;
+    addCurve(label, avg);
+  });
+
+  function addCurve(label, points){
+    const color = COLORS[compareCurves.length % COLORS.length];
+    compareCurves.push({label, color, points, visible:true});
+    renderCurveList();
+    redrawCompare();
+  }
+
+  function renderCurveList(){
+    curveList.innerHTML = '';
+    compareCurves.forEach((c,i)=>{
+      const el = document.createElement('div');
+      el.className = 'curve-item';
+      el.innerHTML = `<div class="swatch" style="background:${c.visible?c.color:'#333'}"></div><span class="name mono">${c.label}</span>`;
+      const toggleBtn = document.createElement('button');
+      toggleBtn.textContent = c.visible ? 'Скрыть' : 'Показать';
+      toggleBtn.addEventListener('click', ()=>{ c.visible=!c.visible; renderCurveList(); redrawCompare(); });
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Удалить';
+      delBtn.addEventListener('click', ()=>{ compareCurves.splice(i,1); renderCurveList(); redrawCompare(); });
+      el.appendChild(toggleBtn); el.appendChild(delBtn);
+      curveList.appendChild(el);
+    });
+  }
+
+  function redrawCompare(){
+    drawResultChart(compareCanvas, compareCurves.filter(c=>c.visible));
+  }
+
+  // ---- shared chart renderer: dB vs frequency, multiple curves ----
+  function drawResultChart(canvas, curves){
+    const ratio = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width*ratio; canvas.height = rect.height*ratio;
+    const ctx2d = canvas.getContext('2d');
+    ctx2d.setTransform(ratio,0,0,ratio,0,0);
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    ctx2d.fillStyle = '#050705';
+    ctx2d.fillRect(0,0,w,h);
+    if(curves.length === 0) return;
+
+    const padL=34, padR=8, padT=8, padB=20;
+    const plotW = w-padL-padR, plotH = h-padT-padB;
+    const dBMin = -30, dBMax = 3;
+
+    // gridlines
+    ctx2d.strokeStyle = '#1a2216'; ctx2d.lineWidth = 1;
+    ctx2d.fillStyle = '#6c7a63'; ctx2d.font = '9px JetBrains Mono';
+    [0,-10,-20,-30].forEach(db=>{
+      const y = padT + (dBMax-db)/(dBMax-dBMin)*plotH;
+      ctx2d.beginPath(); ctx2d.moveTo(padL,y); ctx2d.lineTo(w-padR,y); ctx2d.stroke();
+      ctx2d.fillText(db+'dB', 2, y+3);
+    });
+
+    curves.forEach(curve=>{
+      ctx2d.strokeStyle = curve.color; ctx2d.lineWidth = 1.8; ctx2d.beginPath();
+      curve.points.forEach((p,i)=>{
+        const x = padL + (p.freq-FREQ_MIN)/(FREQ_MAX-FREQ_MIN)*plotW;
+        const dbClamped = Math.max(dBMin, Math.min(dBMax, p.dB));
+        const y = padT + (dBMax-dbClamped)/(dBMax-dBMin)*plotH;
+        if(i===0) ctx2d.moveTo(x,y); else ctx2d.lineTo(x,y);
+      });
+      ctx2d.stroke();
+    });
+
+    // x-axis labels
+    ctx2d.fillStyle = '#6c7a63';
+    [FREQ_MIN, Math.round((FREQ_MIN+FREQ_MAX)/2), FREQ_MAX].forEach(f=>{
+      const x = padL + (f-FREQ_MIN)/(FREQ_MAX-FREQ_MIN)*plotW;
+      ctx2d.fillText(f+'Hz', x-14, h-4);
+    });
+  }
+
+  setRole('tx');
+})();
+</script>
+</body>
+</html>
