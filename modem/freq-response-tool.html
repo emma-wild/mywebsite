@@ -178,9 +178,9 @@
   // so the receiver can anchor its own timeline to the sweep without any
   // external time synchronization between the two devices.
   const SYNC_FREQ = 220;
-  const SYNC_DUR = 0.4;
+  const SYNC_DUR = 1.2; // 3x longer than before — gives a much wider safety margin for confirming genuine detection over both cold-start transients and the stricter debounce below
   const GAP_AFTER_SYNC = 0.2;
-  const WINDOW_MARGIN = 0.15; // seconds of slack on each side of every expected per-frequency window, absorbing sync-detection latency and minor timing jitter
+  const WINDOW_MARGIN = 0.12; // seconds of slack on each side of every expected per-frequency window — for residual jitter only; the fixed sync-confirmation latency is compensated separately when t0 is set (see below), so this stays well under half the tone spacing to avoid overlapping adjacent windows
 
   // ---- Goertzel ----
   function goertzelMag(samples, sampleRate, freq){
@@ -399,19 +399,31 @@
         rms = Math.sqrt(rms/data.length);
         const syncMag = goertzelMag(data, rxCtx.sampleRate, SYNC_FREQ);
         const meanTestMag = frameMags.reduce((a,b)=>a+b,0)/frameMags.length;
-        const syncPresent = rms > 0.0008 && syncMag > meanTestMag*1.5;
+        // Stricter than the modem's own decoders on purpose: 220Hz sits below
+        // the whole test band, and typical ambient noise (traffic, HVAC,
+        // electrical hum) skews toward low frequencies — a mild 1.5x
+        // dominance check was enough for that alone to look like "sync tone
+        // present" even in a quiet room with nothing actually playing.
+        const SYNC_DOMINANCE = 3.0;
+        const SYNC_CONFIRM_FRAMES = 5;
+        const syncPresent = rms > 0.0008 && syncMag > meanTestMag*SYNC_DOMINANCE;
 
         if(syncState === 'waiting'){
           if(syncPresent){
             syncCandidateCount++;
-            if(syncCandidateCount >= 2){ syncState = 'active'; syncCandidateCount = 0; rxStatus.textContent = 'Синхро-тон обнаружен, жду его окончания...'; }
+            if(syncCandidateCount >= SYNC_CONFIRM_FRAMES){ syncState = 'active'; syncCandidateCount = 0; rxStatus.textContent = 'Синхро-тон обнаружен, жду его окончания...'; }
           } else { syncCandidateCount = 0; }
         } else if(syncState === 'active'){
           if(!syncPresent){
             syncCandidateCount++;
-            if(syncCandidateCount >= 2){
+            if(syncCandidateCount >= SYNC_CONFIRM_FRAMES){
               syncState = 'done';
-              t0 = bufStartTime;
+              // bufStartTime is when the confirmation *completed* — the tone
+              // actually ended SYNC_CONFIRM_FRAMES buffers earlier. Compensate
+              // so t0 tracks the true end moment instead of drifting later
+              // with every increase to the confirmation frame count.
+              const bufDur = data.length / rxCtx.sampleRate;
+              t0 = bufStartTime - SYNC_CONFIRM_FRAMES*bufDur;
               rxStatus.textContent = `Синхронизировано — идёт приём замера #${sessionResults.length+1}...`;
             }
           } else { syncCandidateCount = 0; }
