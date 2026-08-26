@@ -156,7 +156,7 @@
 
   <div class="panel" data-label="Как это работает">
     <div class="hint">
-      Свип начинается с короткого синхро-тона (220 Гц), за которым идёт набор одиночных тонов по возрастанию частоты. Приёмник слушает через микрофон, по синхро-тону привязывает свою временную шкалу к передатчику, и для <b>каждой</b> тестовой частоты запоминает пиковую громкость только в её ожидаемом временном окне — случайный шум за пределами этого окна на результат не влияет.<br><br>
+      Свип начинается с короткого двухтонового синхро-маркера (250 + 3200 Гц одновременно, по краям диапазона теста), за которым идёт набор одиночных тонов по возрастанию частоты. Приёмник слушает через микрофон, по паре маркера привязывает свою временную шкалу к передатчику, и для <b>каждой</b> тестовой частоты запоминает пиковую громкость только в её ожидаемом временном окне — случайный шум за пределами этого окна на результат не влияет.<br><br>
       Результат — относительная АЧХ канала: 0 дБ = самая громко принятая частота, всё остальное показано как ослабление относительно неё.
     </div>
   </div>
@@ -177,8 +177,9 @@
   // Sync tone: played once at the very start, well below the test range,
   // so the receiver can anchor its own timeline to the sweep without any
   // external time synchronization between the two devices.
-  const SYNC_FREQ = 220;
-  const SYNC_DUR = 1.2; // 3x longer than before — gives a much wider safety margin for confirming genuine detection over both cold-start transients and the stricter debounce below
+  const SYNC_FREQ_LOW = 250;   // just below the test range — deliberately NOT pushed further down or up alone; robustness comes from requiring BOTH tones together, not from frequency placement
+  const SYNC_FREQ_HIGH = 3200; // just above the test range, but still safely below the ~3-3.5kHz cutoff typical of analog FM voice radios (this tool must eventually work through real T42 hardware, not just laptop/phone speakers)
+  const SYNC_DUR = 1.2;
   const GAP_AFTER_SYNC = 0.2;
   const WINDOW_MARGIN = 0.12; // seconds of slack on each side of every expected per-frequency window — for residual jitter only; the fixed sync-confirmation latency is compensated separately when t0 is set (see below), so this stays well under half the tone spacing to avoid overlapping adjacent windows
 
@@ -206,7 +207,7 @@
     txPanel.style.display = role==='tx' ? 'block' : 'none';
     rxPanel.style.display = role==='rx' ? 'block' : 'none';
     roleHint.innerHTML = role==='tx'
-      ? `Это устройство сначала проигрывает короткий синхро-тон (220 Гц, ниже диапазона теста), затем сам свип (<span>${FREQ_MIN}–${FREQ_MAX} Гц, шаг ${FREQ_STEP} Гц, ${TEST_FREQS.length} точек</span>) через динамик. На втором устройстве откройте эту же страницу, выберите «Приёмник», нажмите «Начать запись» — и только потом здесь жмите «Играть свип».`
+      ? `Это устройство сначала проигрывает короткий двухтоновый синхро-маркер (250 + 3200 Гц, по краям диапазона теста), затем сам свип (<span>${FREQ_MIN}–${FREQ_MAX} Гц, шаг ${FREQ_STEP} Гц, ${TEST_FREQS.length} точек</span>) через динамик. На втором устройстве откройте эту же страницу, выберите «Приёмник», нажмите «Начать запись» — и только потом здесь жмите «Играть свип».`
       : `Это устройство слушает через микрофон. По синхро-тону в начале каждого свипа оно само привязывает свою временную шкалу к передатчику — засекать момент старта вручную не нужно. Впишите название серии, нажмите «Начать запись», подождите секунду, затем на втором устройстве запускайте «Играть свип» сколько угодно раз подряд — каждый прогон засчитается как отдельный замер в одной серии. Когда хватит замеров — сохраните файл.`;
   }
   btnTX.addEventListener('click', ()=>setRole('tx'));
@@ -260,7 +261,8 @@
     }
 
     let t = txCtx.currentTime + LEAD_GUARD;
-    playTone(SYNC_FREQ, SYNC_DUR, t); // sync anchor — RX times everything from when this tone ends
+    playTone(SYNC_FREQ_LOW, SYNC_DUR, t);
+    playTone(SYNC_FREQ_HIGH, SYNC_DUR, t); // both tones together form the sync marker — RX times everything from when this pair stops
     t += SYNC_DUR + GAP_AFTER_SYNC;
     TEST_FREQS.forEach(freq=>{
       playTone(freq, TONE_DUR, t);
@@ -397,16 +399,18 @@
         let rms = 0;
         for(let i=0;i<data.length;i++) rms += data[i]*data[i];
         rms = Math.sqrt(rms/data.length);
-        const syncMag = goertzelMag(data, rxCtx.sampleRate, SYNC_FREQ);
+        const syncLowMag = goertzelMag(data, rxCtx.sampleRate, SYNC_FREQ_LOW);
+        const syncHighMag = goertzelMag(data, rxCtx.sampleRate, SYNC_FREQ_HIGH);
         const meanTestMag = frameMags.reduce((a,b)=>a+b,0)/frameMags.length;
-        // Stricter than the modem's own decoders on purpose: 220Hz sits below
-        // the whole test band, and typical ambient noise (traffic, HVAC,
-        // electrical hum) skews toward low frequencies — a mild 1.5x
-        // dominance check was enough for that alone to look like "sync tone
-        // present" even in a quiet room with nothing actually playing.
-        const SYNC_DOMINANCE = 3.0;
+        // Dual-tone marker (same principle as the modem's own sync marker):
+        // requiring BOTH a low AND a high tone to be simultaneously dominant
+        // is far less likely to be spoofed by real-world ambient noise (which
+        // typically colors the spectrum toward one end, not both at once)
+        // than a single reference frequency ever could be — so each side can
+        // use a more moderate threshold without sacrificing robustness.
+        const SYNC_DOMINANCE = 2.2;
         const SYNC_CONFIRM_FRAMES = 5;
-        const syncPresent = rms > 0.0008 && syncMag > meanTestMag*SYNC_DOMINANCE;
+        const syncPresent = rms > 0.0008 && syncLowMag > meanTestMag*SYNC_DOMINANCE && syncHighMag > meanTestMag*SYNC_DOMINANCE;
 
         if(syncState === 'waiting'){
           if(syncPresent){
